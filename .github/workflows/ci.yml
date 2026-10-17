@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-linux:
+    name: Linux (Ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Syntax validation (bash -n)
+        run: |
+          bash -n PhantomStartup.sh
+          bash -n install.sh
+          bash -n tests/test_engine.sh
+
+      - name: Run ShellCheck
+        run: |
+          shellcheck -x -e SC2034,SC2154,SC1090,SC2296,SC2088,SC2206,SC2207,SC2086,SC2004,SC2162,SC2317,SC2015,SC2030,SC2031 PhantomStartup.sh install.sh tests/test_engine.sh
+
+      - name: Run Bash Test Suite (UTF-8)
+        run: |
+          bash tests/test_engine.sh
+
+      - name: Run Bash Test Suite (LC_ALL=C)
+        run: |
+          LC_ALL=C bash tests/test_engine.sh
+
+      - name: Verify release hashes and installer pins
+        run: |
+          sha256sum -c SHA256SUMS
+          ACTUAL_SH_HASH=$(sha256sum PhantomStartup.sh | awk '{print $1}')
+          grep -q "EXPECTED_SHA256=\"$ACTUAL_SH_HASH\"" install.sh
+          ACTUAL_PS_HASH=$(sha256sum PhantomStartup.ps1 | awk '{print $1}')
+          grep -i -q "\$ExpectedSha256 = \"$ACTUAL_PS_HASH\"" install.ps1
+
+      - name: Install Zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - name: Zsh syntax validation
+        run: |
+          zsh -n PhantomStartup.sh
+          zsh -n install.sh
+
+      - name: Run PowerShell Core Test Suite
+        shell: pwsh
+        run: |
+          pwsh -File tests/test_engine.ps1
+
+  test-macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Syntax validation (bash -n)
+        run: |
+          bash -n PhantomStartup.sh
+          bash -n install.sh
+          bash -n tests/test_engine.sh
+
+      - name: Zsh syntax validation
+        run: |
+          zsh -n PhantomStartup.sh
+          zsh -n install.sh
+
+      - name: Run Bash Test Suite on Apple Native Bash 3.2 (/bin/bash)
+        run: |
+          /bin/bash --version
+          /bin/bash tests/test_engine.sh
+
+      - name: Run Bash Test Suite (Modern Bash)
+        run: |
+          bash tests/test_engine.sh
+
+      - name: Run PowerShell Core Test Suite
+        shell: pwsh
+        run: |
+          pwsh -File tests/test_engine.ps1
+
+  test-windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Windows PowerShell 5.1 Test Suite
+        shell: powershell
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/test_engine.ps1
+
+      - name: Run PowerShell Core 7+ Test Suite
+        shell: pwsh
+        run: |
+          pwsh -File tests/test_engine.ps1
+
+      - name: Run Bash Test Suite (Git Bash)
+        shell: bash
+        run: |
+          bash tests/test_engine.sh

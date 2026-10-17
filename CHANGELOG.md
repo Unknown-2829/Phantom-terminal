@@ -4,6 +4,42 @@ All notable changes to Phantom Terminal will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [4.0.0 "Krypton"] - 2026-10-17
+
+### Added
+- **AI Agent Guard**: Instant silent startup for subshells, CI/CD runners (`$CI`, `$GITHUB_ACTIONS`), and AI coding agents (`$CLAUDE_AGENT`, `$CURSOR_AGENT`, Copilot, non-interactive tty). Override with `PHANTOM_FORCE=1` or silence on-demand with `PHANTOM_QUIET=1`.
+- **Cyberpunk Stealth Mode (`phantom-stealth`)**: Hardware and identity cloaking system. Masks Operator, OS, CPU, Host, RAM, and Prompt path (`~/phantom/core/grid`) with customizable sci-fi aliases (`phantom-stealth on|off|toggle`).
+- **Interactive Live Telemetry (`phantom-dash -Live` / `phantom-top` / `phantom-live`)**: In-place real-time monitoring of CPU, RAM, and Uptime directly inside the dashboard box without terminal scrollback clutter. Exits cleanly on any keypress.
+- **Zero-Dependency History Search (`phantom-search`)**: Interactive cross-platform command history search (`F2` / `phantom-search`) running purely on native shell primitives without requiring PSReadLine 2.2+, Python, or external binaries.
+- **Fail-Closed Release Verification & Embedded Root-of-Trust**: Both fresh installations and runtime updaters enforce fail-closed cryptographic integrity using `SHA256SUMS` manifests and embedded root-of-trust digests (`EXPECTED_SHA256` / `$ExpectedSha256`), aborting execution immediately if checksums mismatch or manifests are unavailable.
+- **Atomic Transactional Staging (Remote & Local)**: Installers deploy updates to isolated temporary files (`.stage.<pid>`), completing AST parsing and SHA-256 validation *before* promoting files or touching user profile hooks. Both remote downloads and local repository installations undergo isolated staging and AST syntax validation. If any error occurs, active installations and profiles remain 100% untouched.
+- **Headless CI & Automated Installer Mode**: Both `install.sh` and `install.ps1` natively detect CI environments, skipping interactive prompts, handling console handles safely in non-interactive pipelines, and supporting `$env:PHANTOM_HOME` and `$env:PHANTOM_PROFILE` overrides for test isolation.
+- **Automated Engine Test Suites**: Added `tests/test_engine.ps1` (31 tests) and `tests/test_engine.sh` (36 tests) validating SemVer comparison, Agent Guard detection, profile boundary parsing, string visual length calculations, history filtering, end-to-end installer transaction safety, and strict fail-closed verification.
+- **Zsh Native Support & CI**: Added native Zsh prompt hooks (`add-zsh-hook precmd _phantom_ps1`), POSIX parameter expansion for git branch detection, and multi-platform GitHub Actions CI coverage across Linux, macOS, and Windows.
+- **Strict Line Ending Enforcement**: Added `.gitattributes` and `.editorconfig` enforcing LF for all Unix shell scripts and CRLF with UTF-8 BOM for Windows PowerShell scripts.
+
+### Fixed
+- **Semantic Versioning Comparison (Bug 1)**: Replaced alphabetical string comparisons with pure Semantic Versioning (`[version]` in PS1 and pure Bash integer SemVer arithmetic). Double-digit minor/patch numbers (e.g. `3.10.0` vs `3.9.0`) and pre-releases (`4.0.0 > 4.0.0-beta.10`) now compare accurately without requiring GNU `sort -V`.
+- **PowerShell Easter Eggs Persistence (Bug 2)**: Replaced ephemeral in-memory storage with persistent disk-backed JSON storage at `~/.phantom-terminal/.secrets`. Fixed array unrolling bugs when loading single-item secrets.
+- **Update Target Path Drift (Bug 3)**: Unified installation target across all platforms to `~/.phantom-terminal/PhantomStartup.ps1` / `.sh`. Auto-migrates legacy `$HOME\PhantomStartup.ps1`.
+- **Termux & Linux CPU Telemetry (Bug 4)**: Replaced single `/proc/stat` read with a 100ms dual-sample delta, accurately reporting real-time CPU utilization rather than post-boot lifetime averages.
+- **Easter Eggs Leak in Help Menu (Bug 5)**: Removed hidden commands from standard `phantom-help` in Bash, aligning with PowerShell parity.
+- **SmartSuggestions Configuration Loss (Bug 6)**: Added full serialization, validation, and retention of `SmartSuggestions`, `StealthMode`, `LiveStats`, and `ShowUsageBars` across config re-saves.
+- **Non-blocking Git HUD (Bug 7)**: Wrapped git branch lookups with timeouts and direct `.git/HEAD` traversal so unresponsive or massive Git repositories never hang shell launch.
+- **Safe Profile Cleaner (Bug 8 / F-06)**: Replaced greedy regex sed deletion with an exact 3-line buffered state machine in `awk` and timestamped backups, protecting user custom comments, aliases, and functions.
+- **PowerShell Core Cross-Platform Path Portability (F-05)**: Replaced Windows-only `$env:USERPROFILE` with platform-agnostic `$HOME` and `Join-Path` directory resolution, ensuring flawless operation across Linux, macOS, and Windows.
+- **History Credential Filter False Positives (F-08)**: Replaced broad keyword matching with precise parameter flags and assignments (`--password=`, `export API_KEY=`, `cat id_rsa`), permitting safe commands like `git commit -m "feat: auth login"` or `kubectl get secret`.
+- **JSON Boolean Normalization (Bug 9)**: Enforced strict lowercase `true`/`false` booleans in Bash config writer to avoid invalid capitalized JSON.
+- **Dashboard Box Visual Alignment**: Unified dashboard box width to 66 characters across PowerShell, Linux, macOS, and Termux with closed right borders (`║`) on CPU/RAM usage bars.
+- **Ctrl+C Terminal State Restoration**: Scoped signal traps strictly around animations and live monitors, restoring cursor visibility without killing active shell sessions upon interrupt.
+- **Zero External Dependencies**: Removed `Install-Module PSReadLine`, `sudo apt-get`, and `pkg install jq`. Zero Python, zero pip, zero mandatory modules, zero admin requirements.
+
+### Changed
+- Unified project version to **4.0.0** across all engines, installers, test suites, and documentation.
+- Streamlined documentation architecture with dedicated guides in `docs/` (`install.md`, `configuration.md`, `platforms.md`, `troubleshooting.md`, `uninstall.md`, `changelogs/`).
+- Cleaned distribution archive packaging to exclude `.git` metadata, reducing release archive size from 1.1 MB down to 76.2 KB.
+
+---
 
 ## [3.7.0] - 2026-04-03
 
@@ -395,6 +431,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[4.0.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v4.0.0
+[3.7.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.7.0
+[3.6.1]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.6.1
+[3.6.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.6.0
+[3.5.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.5.0
+[3.4.1]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.4.1
+[3.4.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.4.0
+[3.3.9]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.3.9
+[3.3.8]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.3.8
+[3.3.7]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.3.7
+[3.3.6]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.3.6
+[3.3.5]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.3.5
+[3.3.4]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.3.4
+[3.3.3]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.3.3
+[3.3.2]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.3.2
+[3.3.1]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.3.1
+[3.3.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.3.0
+[3.2.9]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.2.9
+[3.2.8]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.2.8
+[3.1.1]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.1.1
+[3.1.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.1.0
+[3.0.1]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.0.1
 [3.0.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.0.0
 [2.0.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v2.0.0
 [1.0.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v1.0.0

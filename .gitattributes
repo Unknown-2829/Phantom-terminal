@@ -1,0 +1,14 @@
+# Preserve exact byte-for-byte integrity for release artifacts
+PhantomStartup.sh -text
+PhantomStartup.ps1 -text
+install.sh -text
+install.ps1 -text
+SHA256SUMS -text
+
+# Enforce LF normalization universally across all platforms
+* text=auto eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=lf

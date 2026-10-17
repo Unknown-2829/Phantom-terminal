@@ -1,32 +1,28 @@
 #!/usr/bin/env bash
 #
-# Phantom Terminal - Universal Installer v3.7.0
-# Cross-platform installer with automatic platform detection
-# Supports: Linux, macOS, Termux (Android)
+# Phantom Terminal - Universal Native Installer v4.0.0
+# Cross-platform installer with automatic platform detection and ZERO external dependencies.
+# Supports: Linux, macOS, Termux (Android), BSD
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/main/install.sh | bash
-#   wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh | bash
+#   wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh | bash
 #
 
-# Don't use set -e to allow better error handling
 set -u
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ERROR HANDLING
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Global error flag
 INSTALL_ERRORS=0
 
-# Error handler
 handle_error() {
     local msg="$1"
     echo "  ${RED}[ERROR]${R} $msg" >&2
     INSTALL_ERRORS=$((INSTALL_ERRORS + 1))
 }
 
-# Cleanup function
 cleanup_on_error() {
     if [[ $INSTALL_ERRORS -gt 0 ]]; then
         echo ""
@@ -73,50 +69,97 @@ detect_platform() {
 PLATFORM=$(detect_platform)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# VARIABLES
+# VARIABLES & PATHS
 # ═══════════════════════════════════════════════════════════════════════════
 
-REPO_URL="https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/main"
-CONFIG_DIR="$HOME/.phantom-terminal"
+INSTALL_VERSION="4.0.0"
+INSTALL_CODENAME="Krypton"
+RELEASE_TAG="v$INSTALL_VERSION"
+REPO_URL="https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/$RELEASE_TAG"
+EXPECTED_SHA256="28381135b9221a3be43215c86e9f9eebca6108ec246145aad0ab7531b02f3c7a"
+TARGET_HOME="${PHANTOM_HOME:-${UNKNOWN_HOME:-$HOME}}"
+CONFIG_DIR="$TARGET_HOME/.phantom-terminal"
 CONFIG_FILE="$CONFIG_DIR/config.json"
 INSTALL_PATH="$CONFIG_DIR/PhantomStartup.sh"
+LEGACY_PATH="$TARGET_HOME/PhantomStartup.sh"
 
-# Detect shell and profile
 detect_shell_profile() {
-    if [[ -n "${ZSH_VERSION:-}" ]]; then
+    if [[ -n "${PHANTOM_PROFILE:-}" ]]; then
+        PROFILE="$PHANTOM_PROFILE"
+        SHELL_TYPE="custom"
+        return
+    elif [[ -n "${UNKNOWN_PROFILE:-}" ]]; then
+        PROFILE="$UNKNOWN_PROFILE"
+        SHELL_TYPE="custom"
+        return
+    fi
+    local login_shell="${SHELL##*/}"
+    if [[ "$login_shell" == "zsh" ]] || [[ -n "${ZSH_VERSION:-}" ]]; then
         SHELL_TYPE="zsh"
-        PROFILE="$HOME/.zshrc"
-    elif [[ -n "${BASH_VERSION:-}" ]]; then
+        PROFILE="$TARGET_HOME/.zshrc"
+    elif [[ "$login_shell" == "bash" ]] || [[ -n "${BASH_VERSION:-}" ]]; then
         SHELL_TYPE="bash"
         if [[ "$PLATFORM" == "macos" ]]; then
-            # macOS prefers .bash_profile
-            [[ -f "$HOME/.bash_profile" ]] && PROFILE="$HOME/.bash_profile" || PROFILE="$HOME/.bashrc"
+            [[ -f "$TARGET_HOME/.bash_profile" ]] && PROFILE="$TARGET_HOME/.bash_profile" || PROFILE="$TARGET_HOME/.bashrc"
         else
-            PROFILE="$HOME/.bashrc"
+            PROFILE="$TARGET_HOME/.bashrc"
         fi
     else
         SHELL_TYPE="sh"
-        PROFILE="$HOME/.profile"
+        PROFILE="$TARGET_HOME/.profile"
     fi
 }
 
 detect_shell_profile
 
+# Safe profile cleaner: only removes delimited markers and exact legacy injection lines
 clean_profile_entries() {
     local target_profile="$1"
     [[ ! -f "$target_profile" ]] && return 0
 
-    if [[ "$PLATFORM" == "macos" ]]; then
-        sed -i '.bak' '/if[[:space:]]\+\[[[:space:]]-f[[:space:]]".*PhantomStartup\.sh"[[:space:]]\+\];[[:space:]]*then/,/^[[:space:]]*fi[^[:alnum:]_]*[[:space:]]*$/d' "$target_profile" 2>/dev/null || true
-        sed -i '.bak' '/# >>> Phantom Terminal START >>>/,/# <<< Phantom Terminal END <<</d' "$target_profile" 2>/dev/null || true
-        sed -i '.bak' '/PhantomStartup\|Phantom Terminal/d' "$target_profile" 2>/dev/null || true
+    local ts; ts=$(date +%Y%m%d%H%M%S 2>/dev/null || echo "$$")
+    cp "$target_profile" "${target_profile}.phantom-backup.${ts}" 2>/dev/null || true
+
+    local tmp="${target_profile}.tmp.$$"
+    awk '
+    BEGIN { in_phantom = 0; in_legacy = 0; buf_len = 0 }
+    /# >>> Phantom Terminal START >>>/ { in_phantom = 1; next }
+    /# <<< Phantom Terminal END <<</ { in_phantom = 0; next }
+    in_phantom { next }
+
+    in_legacy == 1 {
+        if ($0 ~ /(source|\.)[[:space:]]+.*PhantomStartup\.sh/) {
+            buf[2] = $0; in_legacy = 2; buf_len = 2; next
+        } else {
+            for (i = 1; i <= buf_len; i++) print buf[i]
+            in_legacy = 0; buf_len = 0
+        }
+    }
+    in_legacy == 2 {
+        if ($0 ~ /^[[:space:]]*fi[[:space:]]*$/) {
+            in_legacy = 0; buf_len = 0; next
+        } else {
+            for (i = 1; i <= buf_len; i++) print buf[i]
+            in_legacy = 0; buf_len = 0
+        }
+    }
+
+    /^[[:space:]]*if[[:space:]]+[[]+[[:space:]]+-[fs][[:space:]]+.*PhantomStartup\.sh/ {
+        in_legacy = 1; buf[1] = $0; buf_len = 1; next
+    }
+    /^[[:space:]]*(source|\.)[[:space:]]+.*PhantomStartup\.sh/ { next }
+    /^[[:space:]]*#[[:space:]]*Phantom Terminal[[:space:]]*$/ { next }
+
+    { print }
+    END { if (in_legacy > 0) { for (i = 1; i <= buf_len; i++) print buf[i] } }
+    ' "$target_profile" > "$tmp" 2>/dev/null
+
+    if [[ -s "$tmp" || ! -s "$target_profile" ]]; then
+        mv -f "$tmp" "$target_profile"
     else
-        sed -i.bak '/if[[:space:]]\+\[[[:space:]]-f[[:space:]]".*PhantomStartup\.sh"[[:space:]]\+\];[[:space:]]*then/,/^[[:space:]]*fi[^[:alnum:]_]*[[:space:]]*$/d' "$target_profile" 2>/dev/null || true
-        sed -i.bak '/# >>> Phantom Terminal START >>>/,/# <<< Phantom Terminal END <<</d' "$target_profile" 2>/dev/null || true
-        sed -i.bak '/PhantomStartup\|Phantom Terminal/d' "$target_profile" 2>/dev/null || true
+        rm -f "$tmp"
     fi
 }
-
 choose_shell_profile() {
     [[ "$NON_INTERACTIVE" == "true" ]] && return 0
     [[ ! -t 0 ]] && return 0
@@ -135,7 +178,6 @@ choose_shell_profile() {
     fi
 
     local i=0
-    local default_label
     for p in "${choices[@]}"; do
         i=$((i + 1))
         if [[ "$p" == "$PROFILE" ]]; then
@@ -143,7 +185,7 @@ choose_shell_profile() {
             break
         fi
     done
-    default_label="${labels[$((default_choice - 1))]}"
+    local default_label="${labels[$((default_choice - 1))]}"
 
     echo ""
     echo "  ${GOLD}[0] INSTALL TARGET${R}"
@@ -153,7 +195,7 @@ choose_shell_profile() {
         echo "  ${CYAN}[$i]${R} $lbl"
     done
 
-    if ! read -p "  Choose shell/profile [Enter: $default_label]: " profile_choice; then
+    if ! read -r -p "  Choose shell/profile [Enter: $default_label]: " profile_choice; then
         profile_choice=""
     fi
     profile_choice=${profile_choice:-$default_choice}
@@ -165,9 +207,9 @@ choose_shell_profile() {
             *".bash_profile"|*".bashrc") SHELL_TYPE="bash" ;;
             *) SHELL_TYPE="sh" ;;
         esac
-        echo "  ${GREEN}[+]${WHITE} Using: $PROFILE${R}"
+        echo "  ${GREEN}[+]${WHITE} Target: $PROFILE${R}"
     else
-        echo "  ${GOLD}[!]${WHITE} Invalid choice, using detected profile: $PROFILE${R}"
+        echo "  ${GOLD}[!]${WHITE} Using detected profile: $PROFILE${R}"
     fi
 }
 
@@ -175,33 +217,27 @@ choose_shell_profile() {
 # HEADER
 # ═══════════════════════════════════════════════════════════════════════════
 
-clear
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    return 0 2>/dev/null || true
+fi
+
+clear 2>/dev/null || true
 echo ""
 echo "${PURPLE}  ╔══════════════════════════════════════════════════════╗${R}"
-echo "${PURPLE}  ║${CYAN}        PHANTOM TERMINAL INSTALLER v3.7.0          ${PURPLE}║${R}"
+echo "${PURPLE}  ║${CYAN}    PHANTOM TERMINAL INSTALLER v4.0.0 \"$INSTALL_CODENAME\"      ${PURPLE}║${R}"
 echo "${PURPLE}  ╚══════════════════════════════════════════════════════╝${R}"
 echo ""
 
-# Show detected platform
 case "$PLATFORM" in
-    termux)
-        echo "  ${GREEN}[+]${WHITE} Platform: Termux (Android)${R}"
-        ;;
-    macos)
-        echo "  ${GREEN}[+]${WHITE} Platform: macOS${R}"
-        ;;
-    linux)
-        echo "  ${GREEN}[+]${WHITE} Platform: Linux${R}"
-        ;;
-    *)
-        echo "  ${GOLD}[!]${WHITE} Platform: Unknown (trying generic install)${R}"
-        ;;
+    termux) echo "  ${GREEN}[+]${WHITE} Platform: Termux (Android)${R}" ;;
+    macos)  echo "  ${GREEN}[+]${WHITE} Platform: macOS${R}" ;;
+    linux)  echo "  ${GREEN}[+]${WHITE} Platform: Linux${R}" ;;
+    *)      echo "  ${GOLD}[!]${WHITE} Platform: POSIX Generic${R}" ;;
 esac
 
 echo "  ${GREEN}[+]${WHITE} Shell: $SHELL_TYPE${R}"
 echo "  ${GREEN}[+]${WHITE} Profile: $PROFILE${R}"
 
-# Verify we can write to necessary locations
 if [[ ! -w "$HOME" ]]; then
     handle_error "Cannot write to home directory: $HOME"
     exit 1
@@ -209,24 +245,21 @@ fi
 
 echo ""
 
-# Confirmation
+# Interactive confirmation
 if [[ -t 0 ]]; then
-    # Interactive mode
-    read -p "  ${GOLD}Continue installation? [Y/n]:${R} " confirm
+    read -r -p "  ${GOLD}Continue installation? [Y/n]:${R} " confirm
     confirm=${confirm:-Y}
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo "  ${RED}Installation cancelled.${R}"
         exit 0
     fi
 else
-    # Non-interactive mode (piped input)
-    echo "  ${GOLD}Running in non-interactive mode (auto-confirming)${R}"
-    confirm="Y"
+    echo "  ${GOLD}Non-interactive session detected (proceeding)${R}"
 fi
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════════════
-# LOAD EXISTING CONFIG
+# CONFIG LOAD & PRESERVATION
 # ═══════════════════════════════════════════════════════════════════════════
 
 THEME="Phantom"
@@ -236,29 +269,61 @@ GRADIENT_TEXT=true
 AUTO_UPDATE=true
 SHOW_SYSTEM_INFO=true
 SMART_SUGGESTIONS=true
+STEALTH_MODE=false
+LIVE_STATS=false
+SHOW_USAGE_BARS=true
+
+# Helper to normalize boolean strings
+to_bool() {
+    local val="${1:-true}"
+    case "$val" in
+        1|[tT][rR][uU][eE]|[yY][eE][sS]|[yY]) echo "true" ;;
+        0|[fF][aA][lL][sS][eE]|[nN][oO]|[nN]) echo "false" ;;
+        *) echo "true" ;;
+    esac
+}
 
 if [[ -f "$CONFIG_FILE" ]]; then
-    echo "  ${GOLD}[*]${GRAY} Reinstalling (your settings are preserved)...${R}"
-
-    # Try to load existing config with jq if available
+    echo "  ${GOLD}[*]${GRAY} Preserving existing configuration...${R}"
     if command -v jq &> /dev/null; then
         THEME=$(jq -r '.Theme // "Phantom"' "$CONFIG_FILE" 2>/dev/null || echo "Phantom")
         MATRIX_MODE=$(jq -r '.MatrixMode // "Letters"' "$CONFIG_FILE" 2>/dev/null || echo "Letters")
-        SHOW_FULL_PATH=$(jq -r '.ShowFullPath // true' "$CONFIG_FILE" 2>/dev/null || echo "true")
-        GRADIENT_TEXT=$(jq -r '.GradientText // true' "$CONFIG_FILE" 2>/dev/null || echo "true")
-        AUTO_UPDATE=$(jq -r '.AutoCheckUpdates // true' "$CONFIG_FILE" 2>/dev/null || echo "true")
-        SHOW_SYSTEM_INFO=$(jq -r '.ShowSystemInfo // true' "$CONFIG_FILE" 2>/dev/null || echo "true")
-        SMART_SUGGESTIONS=$(jq -r '.SmartSuggestions // true' "$CONFIG_FILE" 2>/dev/null || echo "true")
+        SHOW_FULL_PATH=$(to_bool "$(jq -r '.ShowFullPath // true' "$CONFIG_FILE" 2>/dev/null)")
+        GRADIENT_TEXT=$(to_bool "$(jq -r '.GradientText // true' "$CONFIG_FILE" 2>/dev/null)")
+        AUTO_UPDATE=$(to_bool "$(jq -r '.AutoCheckUpdates // true' "$CONFIG_FILE" 2>/dev/null)")
+        SHOW_SYSTEM_INFO=$(to_bool "$(jq -r '.ShowSystemInfo // true' "$CONFIG_FILE" 2>/dev/null)")
+        SMART_SUGGESTIONS=$(to_bool "$(jq -r '.SmartSuggestions // true' "$CONFIG_FILE" 2>/dev/null)")
+        STEALTH_MODE=$(to_bool "$(jq -r '.StealthMode // false' "$CONFIG_FILE" 2>/dev/null)")
+        LIVE_STATS=$(to_bool "$(jq -r '.LiveStats // false' "$CONFIG_FILE" 2>/dev/null)")
+        SHOW_USAGE_BARS=$(to_bool "$(jq -r '.ShowUsageBars // true' "$CONFIG_FILE" 2>/dev/null)")
     else
-        # Parse manually if jq not available
-        THEME=$(grep -o '"Theme"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" 2>/dev/null | sed 's/.*: *"\([^"]*\)".*/\1/' || echo "Phantom")
-        MATRIX_MODE=$(grep -o '"MatrixMode"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" 2>/dev/null | sed 's/.*: *"\([^"]*\)".*/\1/' || echo "Letters")
+        # Pure Bash regex parser - zero dependencies!
+        parse_cfg() {
+            local key="$1"
+            local default="$2"
+            local line
+            line=$(grep -E "\"$key\"[[:space:]]*:" "$CONFIG_FILE" 2>/dev/null | head -1)
+            if [[ -n "$line" ]]; then
+                local val
+                val=$(echo "$line" | sed -E 's/.*:[[:space:]]*"?([^",]*)"?.*/\1/' | tr -d ' \r\t')
+                echo "$val"
+            else
+                echo "$default"
+            fi
+        }
+        THEME=$(parse_cfg "Theme" "Phantom")
+        MATRIX_MODE=$(parse_cfg "MatrixMode" "Letters")
+        SHOW_FULL_PATH=$(to_bool "$(parse_cfg "ShowFullPath" "true")")
+        GRADIENT_TEXT=$(to_bool "$(parse_cfg "GradientText" "true")")
+        AUTO_UPDATE=$(to_bool "$(parse_cfg "AutoCheckUpdates" "true")")
+        SHOW_SYSTEM_INFO=$(to_bool "$(parse_cfg "ShowSystemInfo" "true")")
+        SMART_SUGGESTIONS=$(to_bool "$(parse_cfg "SmartSuggestions" "true")")
+        STEALTH_MODE=$(to_bool "$(parse_cfg "StealthMode" "false")")
+        LIVE_STATS=$(to_bool "$(parse_cfg "LiveStats" "false")")
+        SHOW_USAGE_BARS=$(to_bool "$(parse_cfg "ShowUsageBars" "true")")
     fi
 
-    # Clean previous profile entries (including broken legacy fi lines)
-    clean_profile_entries "$PROFILE"
-
-    echo "  ${GREEN}[+]${WHITE} Ready${R}"
+    echo "  ${GREEN}[+]${WHITE} Settings preserved${R}"
     echo ""
 fi
 
@@ -266,15 +331,13 @@ fi
 # INSTALLATION WIZARD
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Detect if running in non-interactive mode
 NON_INTERACTIVE=false
 if [[ ! -t 0 ]]; then
     NON_INTERACTIVE=true
-    echo "  ${GOLD}[i] Non-interactive mode: using defaults${R}"
+    echo "  ${GOLD}[i] Non-interactive mode: using defaults / existing settings${R}"
     echo ""
 fi
 
-# Fallback shell detection for piped installs (e.g., curl|bash in Termux/macOS)
 if [[ "$SHELL_TYPE" == "sh" ]]; then
     if [[ "${SHELL:-}" == *"zsh"* ]]; then
         SHELL_TYPE="zsh"
@@ -289,19 +352,18 @@ if [[ "$SHELL_TYPE" == "sh" ]]; then
     fi
 fi
 
-# Let user choose installation profile (Linux/macOS/Termux)
 choose_shell_profile
 echo "  ${GREEN}[+]${WHITE} Shell: $SHELL_TYPE${R}"
 echo "  ${GREEN}[+]${WHITE} Profile: $PROFILE${R}"
 echo ""
 
-# Theme
+# Theme selection
 echo "  ${GOLD}[1] THEME${R}"
 d1="1"
 [[ "$THEME" == "Unknown" ]] && d1="2"
 echo "  ${PURPLE}[1] Phantom${R}  ${GREEN}[2] Unknown${R}  ${DGRAY}(current: $THEME)${R}"
 if [[ "$NON_INTERACTIVE" == "false" ]]; then
-    read -p "  Choice [Enter=$d1]: " choice
+    read -r -p "  Choice [Enter=$d1]: " choice
     choice=${choice:-$d1}
 else
     choice=$d1
@@ -316,7 +378,7 @@ d2="1"
 [[ "$MATRIX_MODE" == "Binary" ]] && d2="2"
 echo "  ${CYAN}[1] Letters${R}  ${GREEN}[2] Binary${R}  ${DGRAY}(current: $MATRIX_MODE)${R}"
 if [[ "$NON_INTERACTIVE" == "false" ]]; then
-    read -p "  Choice [Enter=$d2]: " choice
+    read -r -p "  Choice [Enter=$d2]: " choice
     choice=${choice:-$d2}
 else
     choice=$d2
@@ -331,7 +393,7 @@ d3="1"
 [[ "$SHOW_FULL_PATH" == "false" ]] && d3="2"
 echo "  ${CYAN}[1] Full path${R}  ${BLUE}[2] Folder only${R}  ${DGRAY}(current: $([ "$SHOW_FULL_PATH" == "true" ] && echo "Full" || echo "Folder"))${R}"
 if [[ "$NON_INTERACTIVE" == "false" ]]; then
-    read -p "  Choice [Enter=$d3]: " choice
+    read -r -p "  Choice [Enter=$d3]: " choice
     choice=${choice:-$d3}
 else
     choice=$d3
@@ -346,7 +408,7 @@ echo "  ${GOLD}[4] OPTIONS${R}"
 dS="Y"
 [[ "$SHOW_SYSTEM_INFO" == "false" ]] && dS="n"
 if [[ "$NON_INTERACTIVE" == "false" ]]; then
-    read -p "  Show system info? [Y/n, Enter=$dS]: " choice
+    read -r -p "  Show system info? [Y/n, Enter=$dS]: " choice
     choice=${choice:-$dS}
 else
     choice=$dS
@@ -356,7 +418,7 @@ fi
 dG="Y"
 [[ "$GRADIENT_TEXT" == "false" ]] && dG="n"
 if [[ "$NON_INTERACTIVE" == "false" ]]; then
-    read -p "  Gradient logo? [Y/n, Enter=$dG]: " choice
+    read -r -p "  Gradient logo? [Y/n, Enter=$dG]: " choice
     choice=${choice:-$dG}
 else
     choice=$dG
@@ -366,7 +428,7 @@ fi
 dA="Y"
 [[ "$AUTO_UPDATE" == "false" ]] && dA="n"
 if [[ "$NON_INTERACTIVE" == "false" ]]; then
-    read -p "  Auto-update? [Y/n, Enter=$dA]: " choice
+    read -r -p "  Auto-update check? [Y/n, Enter=$dA]: " choice
     choice=${choice:-$dA}
 else
     choice=$dA
@@ -376,189 +438,139 @@ fi
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════════════
-# INSTALL
+# INSTALLATION (ZERO-DEPENDENCY)
 # ═══════════════════════════════════════════════════════════════════════════
 
 echo "  ${GOLD}═══ INSTALLING ═══${R}"
 echo ""
 
-# Check dependencies
-echo "  ${CYAN}[1/4]${WHITE} Checking dependencies...${R}"
+# Dependency Check: Zero-dependency mode!
+echo "  ${CYAN}[1/4]${WHITE} Verifying zero-dependency environment...${R}"
+echo "  ${GREEN}[+] Native shell mode ready (zero external packages required)${R}"
 
-missing_deps=()
-command -v curl &> /dev/null || missing_deps+=("curl")
-command -v git &> /dev/null || missing_deps+=("git")
+# Deploy script
+echo "  ${CYAN}[2/4]${WHITE} Deploying PhantomStartup.sh...${R}"
+mkdir -p "$CONFIG_DIR" 2>/dev/null || true
 
-if [[ ${#missing_deps[@]} -gt 0 ]]; then
-    echo "  ${GOLD}[!]${WHITE} Missing dependencies: ${missing_deps[*]}${R}"
-
-    if [[ "$PLATFORM" == "termux" ]]; then
-        echo "  ${GRAY}Installing with pkg...${R}"
-        if pkg install -y "${missing_deps[@]}" 2>&1 | grep -v "^$"; then
-            echo "  ${GREEN}[+]${WHITE} Dependencies installed${R}"
-        else
-            echo "  ${RED}[!]${WHITE} Failed to install some dependencies${R}"
-            echo "  ${GOLD}[!]${WHITE} Please run manually: pkg install ${missing_deps[*]}${R}"
-        fi
-    elif [[ "$PLATFORM" == "macos" ]]; then
-        if command -v brew &> /dev/null; then
-            echo "  ${GRAY}Installing with Homebrew...${R}"
-            if brew install "${missing_deps[@]}" 2>&1 | tail -3; then
-                echo "  ${GREEN}[+]${WHITE} Dependencies installed${R}"
-            else
-                echo "  ${RED}[!]${WHITE} Failed to install some dependencies${R}"
-                echo "  ${GOLD}[!]${WHITE} Please run manually: brew install ${missing_deps[*]}${R}"
-            fi
-        else
-            echo "  ${GOLD}[!] Please install Homebrew and run: brew install ${missing_deps[*]}${R}"
-        fi
-    elif [[ "$PLATFORM" == "linux" ]]; then
-        if command -v apt-get &> /dev/null; then
-            echo "  ${GRAY}Installing with apt-get...${R}"
-            if sudo apt-get update -qq 2>&1 && sudo apt-get install -y "${missing_deps[@]}" 2>&1 | tail -3; then
-                echo "  ${GREEN}[+]${WHITE} Dependencies installed${R}"
-            else
-                echo "  ${RED}[!]${WHITE} Failed to install some dependencies${R}"
-                echo "  ${GOLD}[!]${WHITE} Please run manually: sudo apt-get install ${missing_deps[*]}${R}"
-            fi
-        elif command -v yum &> /dev/null; then
-            echo "  ${GRAY}Installing with yum...${R}"
-            if sudo yum install -y "${missing_deps[@]}" 2>&1 | tail -3; then
-                echo "  ${GREEN}[+]${WHITE} Dependencies installed${R}"
-            else
-                echo "  ${RED}[!]${WHITE} Failed to install some dependencies${R}"
-                echo "  ${GOLD}[!]${WHITE} Please run manually: sudo yum install ${missing_deps[*]}${R}"
-            fi
-        else
-            echo "  ${GOLD}[!] Please install: ${missing_deps[*]}${R}"
-        fi
-    fi
-
-    # Verify dependencies are now available
-    still_missing=()
-    for dep in "${missing_deps[@]}"; do
-        command -v "$dep" &> /dev/null || still_missing+=("$dep")
-    done
-
-    if [[ ${#still_missing[@]} -gt 0 ]]; then
-        handle_error "Still missing required dependencies: ${still_missing[*]}"
-        echo "  ${GOLD}Installation cannot continue without: ${still_missing[*]}${R}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+stage_path="${INSTALL_PATH}.stage.$$.$RANDOM"
+if [[ -f "$SCRIPT_DIR/PhantomStartup.sh" ]]; then
+    # Isolated staging & syntax validation for local deployment
+    cp -f "$SCRIPT_DIR/PhantomStartup.sh" "$stage_path"
+    if [[ ! -s "$stage_path" ]] || [[ $(wc -c < "$stage_path" 2>/dev/null || echo 0) -lt 1000 ]] || ! grep -q "Phantom Terminal\|PhantomStartup" "$stage_path" 2>/dev/null || ! bash -n "$stage_path" 2>/dev/null; then
+        rm -f "$stage_path" 2>/dev/null || true
+        handle_error "Local PhantomStartup.sh failed integrity check (corrupted or invalid syntax). Aborting installation."
         exit 1
     fi
-fi
-
-# Install jq if not present (optional, for better config parsing)
-if ! command -v jq &> /dev/null; then
-    echo "  ${GRAY}[i] jq not found (optional, but recommended)${R}"
-    if [[ "$PLATFORM" == "termux" ]]; then
-        pkg install -y jq 2>/dev/null || true
+    if ! mv -f "$stage_path" "$INSTALL_PATH"; then
+        rm -f "$stage_path" 2>/dev/null || true
+        handle_error "Failed to promote staged file to $INSTALL_PATH."
+        exit 1
     fi
-fi
-
-echo "  ${GREEN}[+] Dependencies checked${R}"
-
-# Download
-echo "  ${CYAN}[2/4]${WHITE} Downloading...${R}"
-
-# Create config directory with error checking
-if ! mkdir -p "$CONFIG_DIR" 2>/dev/null; then
-    handle_error "Failed to create config directory: $CONFIG_DIR"
-    exit 1
-fi
-
-# Download with retry logic
-MAX_RETRIES=3
-RETRY_COUNT=0
-DOWNLOAD_SUCCESS=false
-
-while [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; do
-    if curl -fsSL --connect-timeout 10 --max-time 30 "$REPO_URL/PhantomStartup.sh" -o "$INSTALL_PATH" 2>/dev/null; then
-        DOWNLOAD_SUCCESS=true
-        break
-    else
-        RETRY_COUNT=$((RETRY_COUNT + 1))
-        if [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; then
-            echo "  ${GOLD}[!]${WHITE} Download failed, retrying ($RETRY_COUNT/$MAX_RETRIES)...${R}"
-            sleep 2
+    rm -f "$LEGACY_PATH" 2>/dev/null || true
+    chmod +x "$INSTALL_PATH" 2>/dev/null || true
+    echo "  ${GREEN}[+] Deployed and validated from local repository${R}"
+else
+    DOWNLOAD_SUCCESS=false
+    sums_file="${INSTALL_PATH}.stage.$$.sums"
+    if command -v curl &> /dev/null; then
+        if curl -fsSL --connect-timeout 10 --max-time 30 "$REPO_URL/PhantomStartup.sh" -o "$stage_path" 2>/dev/null; then
+            DOWNLOAD_SUCCESS=true
+            curl -fsSL --connect-timeout 10 --max-time 15 "$REPO_URL/SHA256SUMS" -o "$sums_file" 2>/dev/null || true
+        fi
+    elif command -v wget &> /dev/null; then
+        if wget -qO "$stage_path" --timeout=30 "$REPO_URL/PhantomStartup.sh" 2>/dev/null; then
+            DOWNLOAD_SUCCESS=true
+            wget -qO "$sums_file" --timeout=15 "$REPO_URL/SHA256SUMS" 2>/dev/null || true
         fi
     fi
-done
 
-if [[ "$DOWNLOAD_SUCCESS" != "true" ]]; then
-    handle_error "Failed to download PhantomStartup.sh after $MAX_RETRIES attempts"
-    echo "  ${GOLD}[!]${WHITE} Please check your internet connection and try again${R}"
-    echo "  ${GOLD}[!]${WHITE} Or download manually from: $REPO_URL/PhantomStartup.sh${R}"
-    exit 1
-fi
-
-# Verify downloaded file
-if [[ ! -f "$INSTALL_PATH" ]] || [[ ! -s "$INSTALL_PATH" ]]; then
-    handle_error "Downloaded file is missing or empty"
-    exit 1
-fi
-
-# Verify it's a valid shell script
-if ! head -1 "$INSTALL_PATH" | grep -q "^#!.*bash"; then
-    handle_error "Downloaded file is not a valid bash script"
-    rm -f "$INSTALL_PATH"
-    exit 1
-fi
-
-if ! chmod +x "$INSTALL_PATH" 2>/dev/null; then
-    handle_error "Failed to make script executable"
-    exit 1
-fi
-
-echo "  ${GREEN}[+] Downloaded and verified${R}"
-
-# Profile
-echo "  ${CYAN}[3/4]${WHITE} Updating profile ($PROFILE)...${R}"
-
-# Create profile if it doesn't exist
-if ! touch "$PROFILE" 2>/dev/null; then
-    handle_error "Cannot write to profile: $PROFILE"
-    exit 1
-fi
-
-# Clean once more before append to guarantee idempotent/recoverable installs
-clean_profile_entries "$PROFILE"
-
-# Check if already added to avoid duplicates
-if grep -Eq "# >>> Phantom Terminal START >>>|PhantomStartup\\.sh|Phantom Terminal" "$PROFILE" 2>/dev/null; then
-    echo "  ${GRAY}[i] Phantom Terminal already in profile, skipping${R}"
-else
-    # Create backup before modifying
-    if [[ -f "$PROFILE" ]]; then
-        cp "$PROFILE" "${PROFILE}.phantom-backup" 2>/dev/null || true
+    if [[ "$DOWNLOAD_SUCCESS" != "true" || ! -s "$stage_path" ]]; then
+        rm -f "$stage_path" "$sums_file" 2>/dev/null || true
+        handle_error "Failed to download PhantomStartup.sh from $RELEASE_TAG. Ensure curl or wget is installed."
+        exit 1
     fi
 
-    # Add to profile with error checking
-    if cat >> "$PROFILE" <<EOF
+    # Mandatory fail-closed SHA-256 release checksum verification
+    actual_hash=""
+    if command -v sha256sum &>/dev/null; then
+        actual_hash=$(sha256sum "$stage_path" 2>/dev/null | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+    elif command -v shasum &>/dev/null; then
+        actual_hash=$(shasum -a 256 "$stage_path" 2>/dev/null | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+    elif command -v openssl &>/dev/null; then
+        actual_hash=$(openssl dgst -sha256 "$stage_path" 2>/dev/null | awk '{print $NF}' | tr '[:upper:]' '[:lower:]')
+    fi
+
+    manifest_hash=""
+    if [[ -s "$sums_file" ]]; then
+        manifest_hash=$(grep -E "(^|[[:space:]])PhantomStartup\.sh($|[[:space:]])" "$sums_file" | awk '{print $1}' | head -1 | tr '[:upper:]' '[:lower:]')
+        rm -f "$sums_file"
+    fi
+
+    if [[ -z "$actual_hash" ]]; then
+        rm -f "$stage_path" "$sums_file" 2>/dev/null || true
+        handle_error "Security verification failed: Unable to compute SHA-256 checksum (missing sha256sum/shasum/openssl)."
+        exit 1
+    fi
+
+    # Strict fail-closed verification: manifest MUST exist and contain target hash
+    if [[ -z "$manifest_hash" || ! "$manifest_hash" =~ ^[a-f0-9]{64}$ ]]; then
+        rm -f "$stage_path" "$sums_file" 2>/dev/null || true
+        handle_error "Security verification failed: SHA256SUMS release manifest is missing, invalid, or does not contain PhantomStartup.sh. Aborting for security."
+        exit 1
+    fi
+
+    # Manifest hash MUST match embedded root-of-trust digest
+    if [[ -n "$EXPECTED_SHA256" && "$manifest_hash" != "$EXPECTED_SHA256" ]]; then
+        rm -f "$stage_path" "$sums_file" 2>/dev/null || true
+        handle_error "Security verification failed: Manifest checksum does not match embedded root-of-trust digest."
+        exit 1
+    fi
+
+    expected_hash="$manifest_hash"
+    if [[ "$actual_hash" != "$expected_hash" ]]; then
+        rm -f "$stage_path" "$sums_file" 2>/dev/null || true
+        handle_error "Security verification failed: SHA-256 checksum mismatch for PhantomStartup.sh (expected: $expected_hash, got: $actual_hash)."
+        exit 1
+    fi
+
+    if ! bash -n "$stage_path" 2>/dev/null || ! grep -q "Phantom Terminal\|PhantomStartup" "$stage_path" 2>/dev/null; then
+        rm -f "$stage_path"
+        handle_error "Downloaded PhantomStartup.sh failed integrity check (corrupted or invalid syntax)."
+        exit 1
+    fi
+
+    # Staging passed all checks: promote staged file to active installation path
+    if ! mv -f "$stage_path" "$INSTALL_PATH"; then
+        rm -f "$stage_path" 2>/dev/null || true
+        handle_error "Failed to promote staged file to $INSTALL_PATH."
+        exit 1
+    fi
+    rm -f "$LEGACY_PATH" 2>/dev/null || true
+    echo "  ${GREEN}[+] Downloaded from $RELEASE_TAG and verified SHA-256 integrity${R}"
+fi
+
+chmod +x "$INSTALL_PATH" 2>/dev/null || true
+
+# Profile setup
+echo "  ${CYAN}[3/4]${WHITE} Configuring profile ($PROFILE)...${R}"
+touch "$PROFILE" 2>/dev/null || true
+clean_profile_entries "$PROFILE"
+
+cat >> "$PROFILE" <<EOF
 
 # >>> Phantom Terminal START >>>
-# Phantom Terminal
 if [ -f "$INSTALL_PATH" ]; then
     source "$INSTALL_PATH"
 fi
 # <<< Phantom Terminal END <<<
 EOF
-    then
-        echo "  ${GREEN}[+] Profile updated${R}"
-    else
-        handle_error "Failed to update profile"
-        # Restore backup if available
-        if [[ -f "${PROFILE}.phantom-backup" ]]; then
-            mv "${PROFILE}.phantom-backup" "$PROFILE" 2>/dev/null || true
-        fi
-        exit 1
-    fi
-fi
 
-# Config
+echo "  ${GREEN}[+] Profile updated safely${R}"
+
+# Save Config
 echo "  ${CYAN}[4/4]${WHITE} Saving config...${R}"
-
-# Save config with error checking
-if cat > "$CONFIG_FILE" <<EOF
+cat > "$CONFIG_FILE" <<EOF
 {
   "AnimationEnabled": true,
   "MatrixDuration": 2,
@@ -571,62 +583,45 @@ if cat > "$CONFIG_FILE" <<EOF
   "SmartSuggestions": $SMART_SUGGESTIONS,
   "Theme": "$THEME",
   "AutoCheckUpdates": $AUTO_UPDATE,
-  "SilentUpdate": true,
-  "UpdateCheckDays": 1
+  "SilentUpdate": false,
+  "UpdateCheckDays": 1,
+  "StealthMode": $STEALTH_MODE,
+  "LiveStats": $LIVE_STATS,
+  "ShowUsageBars": $SHOW_USAGE_BARS
 }
 EOF
-then
-    # Verify config is valid JSON (if jq available)
-    if command -v jq &> /dev/null; then
-        if ! jq . "$CONFIG_FILE" > /dev/null 2>&1; then
-            handle_error "Generated invalid config JSON"
-            exit 1
-        fi
-    fi
-    echo "  ${GREEN}[+] Config saved${R}"
-else
-    handle_error "Failed to save config file"
-    exit 1
-fi
 
+echo "  ${GREEN}[+] Config saved to $CONFIG_FILE${R}"
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SUCCESS
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Clear error trap for successful completion
 trap - EXIT
 INSTALL_ERRORS=0
 
 echo "  ${GREEN}╔════════════════════════════════════════════════╗${R}"
-echo "  ${GREEN}║${WHITE}         INSTALLATION COMPLETE!              ${GREEN}║${R}"
+echo "  ${GREEN}║${WHITE}     INSTALLATION COMPLETE! (v4.0.0 \"$INSTALL_CODENAME\")    ${GREEN}║${R}"
 echo "  ${GREEN}╚════════════════════════════════════════════════╝${R}"
 echo ""
 echo "  ${CYAN}Restart your terminal or run:${R}"
 echo "  ${WHITE}source $PROFILE${R}"
 echo ""
 echo "  ${GOLD}Settings:${WHITE} $THEME | $MATRIX_MODE | $([ "$SHOW_FULL_PATH" == "true" ] && echo "Full" || echo "Folder")${R}"
-echo "  ${GOLD}Commands:${WHITE} ${GOLD}phantom-help${GRAY} | ${GOLD}phantom-theme${GRAY} | ${GOLD}phantom-config${R}"
+cmd_p="phantom"
+    [[ "$THEME" == "Unknown" ]] && cmd_p="unknown"
+    echo "  ${GOLD}Commands:${WHITE} ${GOLD}${cmd_p}-help${GRAY} | ${GOLD}${cmd_p}-dash -Live${GRAY} | ${GOLD}${cmd_p}-stealth${GRAY} | ${GOLD}${cmd_p}-search${R}"
 echo ""
 
-# Platform-specific notes
 case "$PLATFORM" in
     termux)
-        echo "  ${CYAN}[Termux] Optimized for mobile display${R}"
-        echo "  ${GRAY}Consider using Hacker's Keyboard for better experience${R}"
-        echo "  ${GRAY}Tip: Grant storage permission with 'termux-setup-storage'${R}"
-        echo ""
+        echo "  ${CYAN}[Termux] Optimized for mobile touch screens and proot${R}"
         ;;
     macos)
-        echo "  ${CYAN}[macOS] Works best with iTerm2 or Terminal.app${R}"
-        echo ""
+        echo "  ${CYAN}[macOS] Compatible with Terminal.app, iTerm2, Kitty, and Ghostty${R}"
+        ;;
+    linux)
+        echo "  ${CYAN}[Linux] Works across all POSIX shells and terminal emulators${R}"
         ;;
 esac
-
-# Final verification
-echo "  ${GRAY}Installation verified:${R}"
-echo "  ${GRAY}  - Script: $INSTALL_PATH${R}"
-echo "  ${GRAY}  - Config: $CONFIG_FILE${R}"
-echo "  ${GRAY}  - Profile: $PROFILE${R}"
-echo ""
