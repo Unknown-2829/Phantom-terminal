@@ -1,18 +1,19 @@
-﻿<#
+<#
 .SYNOPSIS
-    Phantom Terminal - Fast Native Installer v4.2.1
+    Phantom Terminal - Fast Native Installer v4.2.2
 .DESCRIPTION
     High-performance installer with robust config persistence and profile safety.
-    Run: irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.1/install.ps1 | iex
+    Run: irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.ps1 | iex
 #>
 
 # Fast init
 $ErrorActionPreference = "Stop"
-$InstallVersion = "4.2.1"
+$InstallVersion = "4.2.2"
 $InstallCodename = "Krypton"
 $ReleaseTag = "v$InstallVersion"
 $RepoUrl = "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/$ReleaseTag"
-$ExpectedSha256 = "3fb33deccb5143d8801e1819b8c7d708a9153616e885fa1fc3a5daba7e4ba9cb"
+$AssetUrl = if ($RepoUrl -like "*github*") { "https://github.com/Unknown-2829/Phantom-terminal/releases/download/$ReleaseTag" } else { $RepoUrl }
+$ExpectedSha256 = "24c29a2e71982f65c51a618a5adb0782a87a7213e7c843fd2e91ee5c83dd175e"
 $UserHome = if ($env:PHANTOM_HOME) { $env:PHANTOM_HOME } elseif ($env:UNKNOWN_HOME) { $env:UNKNOWN_HOME } elseif ($HOME) { $HOME } elseif ($env:USERPROFILE) { $env:USERPROFILE } else { [Environment]::GetFolderPath('UserProfile') }
 $ConfigDir = Join-Path $UserHome ".phantom-terminal"
 $InstallPath = Join-Path $ConfigDir "PhantomStartup.ps1"
@@ -232,16 +233,27 @@ try {
         $sumsFile = Join-Path $ConfigDir "SHA256SUMS.stage.$stageId"
 
         try {
-            Invoke-WebRequest -Uri "$RepoUrl/PhantomStartup.ps1" -OutFile $stagePath -UseBasicParsing -TimeoutSec 30
+            Invoke-WebRequest -Uri "$AssetUrl/PhantomStartup.ps1" -OutFile $stagePath -UseBasicParsing -TimeoutSec 30
         } catch {
-            if (Test-Path $stagePath) { Remove-Item $stagePath -Force -ErrorAction SilentlyContinue }
-            throw "Failed to download PhantomStartup.ps1 from $($ReleaseTag): $_"
+            try {
+                Invoke-WebRequest -Uri "$RepoUrl/PhantomStartup.ps1" -OutFile $stagePath -UseBasicParsing -TimeoutSec 30
+            } catch {
+                if (Test-Path $stagePath) { Remove-Item $stagePath -Force -ErrorAction SilentlyContinue }
+                throw "Failed to download PhantomStartup.ps1 from $($ReleaseTag): $_"
+            }
         }
 
         # Mandatory fail-closed SHA-256 release checksum verification
         $manifestHash = $null
         try {
-            Invoke-WebRequest -Uri "$RepoUrl/SHA256SUMS" -OutFile $sumsFile -UseBasicParsing -TimeoutSec 15 -ErrorAction SilentlyContinue
+            Invoke-WebRequest -Uri "$AssetUrl/SHA256SUMS" -OutFile $sumsFile -UseBasicParsing -TimeoutSec 15 -ErrorAction SilentlyContinue
+        } catch {}
+        if (-not (Test-Path $sumsFile) -or (Get-Item $sumsFile).Length -eq 0) {
+            try {
+                Invoke-WebRequest -Uri "$RepoUrl/SHA256SUMS" -OutFile $sumsFile -UseBasicParsing -TimeoutSec 15 -ErrorAction SilentlyContinue
+            } catch {}
+        }
+        try {
             if (Test-Path $sumsFile) {
                 $expectedLine = Get-Content $sumsFile -ErrorAction SilentlyContinue | Where-Object { $_ -match '\s+PhantomStartup\.ps1$' } | Select-Object -First 1
                 if ($expectedLine) {
@@ -250,7 +262,7 @@ try {
                 Remove-Item $sumsFile -Force -ErrorAction SilentlyContinue
             }
         } catch {
-            # Manifest download failed
+            # Manifest parsing failed
         }
 
         # Strict fail-closed verification: manifest MUST exist and contain target hash
@@ -313,8 +325,16 @@ if (Test-Path "$InstallPath") {
 }
 # <<< Phantom Terminal END <<<
 "@
-    Add-Content -Path $targetProfile -Value $profileBlock -Encoding UTF8
-    Write-Host "  $Green$b_plus Profile configured safely$R"
+    try {
+        Add-Content -Path $targetProfile -Value $profileBlock -Encoding UTF8 -ErrorAction Stop
+        $profileContent = Get-Content -Path $targetProfile -Raw -ErrorAction Stop
+        if ($profileContent -notmatch '# >>> Phantom Terminal START >>>') {
+            throw "Verification failed: Startup block missing from $targetProfile."
+        }
+        Write-Host "  $Green$b_plus Profile configured safely$R"
+    } catch {
+        throw "Failed to configure PowerShell profile at $($targetProfile): $_"
+    }
 
     # Config
     Write-Host "  $Cyan$b_44 $White Saving Config...$R"

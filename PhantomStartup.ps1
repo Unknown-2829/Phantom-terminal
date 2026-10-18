@@ -15,7 +15,7 @@
 # VERSION & PATHS
 # ═══════════════════════════════════════════════════════════════════════════
 
-$Script:Version = "4.2.1"
+$Script:Version = "4.2.2"
 $Script:Codename = "Krypton"
 $Script:FullVersion = "v$Script:Version `"$Script:Codename`""
 $Script:RepoOwner = "Unknown-2829"
@@ -271,8 +271,12 @@ function Get-PhantomConfig {
             if ($null -ne $json.SilentUpdate)     { $config.SilentUpdate = [bool]$json.SilentUpdate }
             if ($null -ne $json.UpdateCheckDays)  { $config.UpdateCheckDays = [int]$json.UpdateCheckDays }
 
-            return $config
-        } catch {}
+        } catch {
+            $ts = (Get-Date).ToString("yyyyMMddHHmmss")
+            $corruptFile = "$Script:ConfigFile.corrupt.$ts"
+            Copy-Item $Script:ConfigFile $corruptFile -Force -ErrorAction SilentlyContinue
+            Write-Warning "Corrupt configuration detected in $Script:ConfigFile. Backup preserved to $corruptFile. Resetting to defaults."
+        }
     }
 
     Save-PhantomConfig -Config $config
@@ -399,10 +403,11 @@ function Compare-PhantomPreRelease {
         $isNum2 = $p2 -match '^\d+$'
 
         if ($isNum1 -and $isNum2) {
-            $n1 = [int64]$p1
-            $n2 = [int64]$p2
-            if ($n1 -gt $n2) { return 1 }
-            if ($n1 -lt $n2) { return -1 }
+            if ($p1.Length -gt $p2.Length) { return 1 }
+            if ($p1.Length -lt $p2.Length) { return -1 }
+            $cmp = [string]::CompareOrdinal($p1, $p2)
+            if ($cmp -gt 0) { return 1 }
+            if ($cmp -lt 0) { return -1 }
         } elseif ($isNum1 -and -not $isNum2) {
             return -1 # numeric < non-numeric
         } elseif (-not $isNum1 -and $isNum2) {
@@ -441,7 +446,7 @@ function Test-PhantomVersionGreater {
         if ($pre1 -and $pre2) { return ((Compare-PhantomPreRelease $pre1 $pre2) -gt 0) }
         return $false
     } catch {
-        return $clean1 -gt $clean2
+        return $false
     }
 }
 
@@ -510,18 +515,19 @@ function Update-PhantomTerminal {
         if (Test-PhantomVersionGreater $latestVersion $Script:Version) {
             Write-Host "$($Script:Colors.Gold)Updating from v$Script:Version to v$latestVersion...$($Script:Colors.Reset)"
 
-            # Save release notes if present
+            # Save release notes and changelog markdown
+            $changelogDest = Join-Path $Script:ConfigDir "latest_changelog.md"
             if ($response.body) {
                 try {
                     $notesFile = Join-Path $Script:ConfigDir "release_notes.txt"
                     $response.body | Out-File $notesFile -Encoding UTF8 -Force
+                    $response.body | Out-File $changelogDest -Encoding UTF8 -Force
                 } catch {}
             }
 
             # Download changelog markdown if available
             try {
                 $changelogUrl = "https://raw.githubusercontent.com/$Script:RepoOwner/$Script:RepoName/v$latestVersion/docs/changelogs/v$latestVersion.md"
-                $changelogDest = Join-Path $Script:ConfigDir "latest_changelog.md"
                 Invoke-WebRequest -Uri $changelogUrl -OutFile $changelogDest -UseBasicParsing -TimeoutSec 8 -ErrorAction SilentlyContinue
             } catch {}
 
@@ -529,29 +535,39 @@ function Update-PhantomTerminal {
             Copy-Item $Script:ScriptPath $backupFile -Force
 
             $tempDownload = "$env:TEMP\PhantomStartup_v4_manual.ps1"
+            $releaseScriptUrl = "https://github.com/$Script:RepoOwner/$Script:RepoName/releases/download/v$latestVersion/PhantomStartup.ps1"
             $tagScriptUrl = "https://raw.githubusercontent.com/$Script:RepoOwner/$Script:RepoName/v$latestVersion/PhantomStartup.ps1"
             $altTagScriptUrl = "https://raw.githubusercontent.com/$Script:RepoOwner/$Script:RepoName/$latestVersion/PhantomStartup.ps1"
 
             try {
-                Invoke-WebRequest -Uri $tagScriptUrl -OutFile $tempDownload -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+                Invoke-WebRequest -Uri $releaseScriptUrl -OutFile $tempDownload -UseBasicParsing -TimeoutSec 20 -ErrorAction Stop
             } catch {
                 try {
-                    Invoke-WebRequest -Uri $altTagScriptUrl -OutFile $tempDownload -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+                    Invoke-WebRequest -Uri $tagScriptUrl -OutFile $tempDownload -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
                 } catch {
-                    throw "Failed to download release asset for tag v$latestVersion"
+                    try {
+                        Invoke-WebRequest -Uri $altTagScriptUrl -OutFile $tempDownload -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+                    } catch {
+                        throw "Failed to download release asset for tag v$latestVersion"
+                    }
                 }
             }
 
             # Strict fail-closed SHA-256 release checksum verification
             $checksumValid = $false
             $sumsFile = "$env:TEMP\Phantom_SHA256SUMS.txt"
+            $releaseSumsUrl = "https://github.com/$Script:RepoOwner/$Script:RepoName/releases/download/v$latestVersion/SHA256SUMS"
             $sumsUrl = "https://raw.githubusercontent.com/$Script:RepoOwner/$Script:RepoName/v$latestVersion/SHA256SUMS"
             $altSumsUrl = "https://raw.githubusercontent.com/$Script:RepoOwner/$Script:RepoName/$latestVersion/SHA256SUMS"
             try {
                 try {
-                    Invoke-WebRequest -Uri $sumsUrl -OutFile $sumsFile -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                    Invoke-WebRequest -Uri $releaseSumsUrl -OutFile $sumsFile -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
                 } catch {
-                    Invoke-WebRequest -Uri $altSumsUrl -OutFile $sumsFile -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                    try {
+                        Invoke-WebRequest -Uri $sumsUrl -OutFile $sumsFile -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                    } catch {
+                        Invoke-WebRequest -Uri $altSumsUrl -OutFile $sumsFile -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                    }
                 }
 
                 if (Test-Path $sumsFile) {
@@ -1178,7 +1194,8 @@ function Show-UpdateCelebrationModal {
     Write-Host ""
     Write-Host "$indent$primary$($Script:Symbols.TopLeft)$hLine$($Script:Symbols.TopRight)$($Script:Colors.Reset)"
     $title = "⚡ SYSTEM UPGRADE SUCCESSFUL ⚡"
-    $titlePad = [Math]::Max(0, $inner - $title.Length)
+    $titleWidth = $title.Length + ([regex]::Matches($title, [char]0x26A1)).Count
+    $titlePad = [Math]::Max(0, $inner - $titleWidth)
     $hl = [Math]::Floor($titlePad / 2)
     $hr = $titlePad - $hl
     Write-Host "$indent$primary$($Script:Symbols.VLine)$(' ' * $hl)$($Script:Colors.Gold)$title$primary$(' ' * $hr)$($Script:Symbols.VLine)$($Script:Colors.Reset)"
@@ -1189,11 +1206,15 @@ function Show-UpdateCelebrationModal {
     Write-Host "$indent$($Script:Colors.NeonGreen)  $($Script:CurrentTheme.Title) v$Script:Version `"$Script:Codename`" is now online!$($Script:Colors.Reset)"
     Write-Host ""
 
-    # Check for changelog markdown file
+    # Check for changelog markdown file or release notes
     $changelogFile = Join-Path $Script:ConfigDir "latest_changelog.md"
-    if (-not (Test-Path $changelogFile)) {
+    if (-not (Test-Path $changelogFile) -or (Get-Item $changelogFile).Length -lt 20) {
         $candidate = Join-Path $PSScriptRoot "docs\changelogs\v$Script:Version.md"
         if (Test-Path $candidate) { $changelogFile = $candidate }
+        else {
+            $notesCandidate = Join-Path $Script:ConfigDir "release_notes.txt"
+            if (Test-Path $notesCandidate) { $changelogFile = $notesCandidate }
+        }
     }
     $bSym = [char]0x2022
     if (Test-Path $changelogFile) {
@@ -1217,10 +1238,12 @@ function Show-UpdateCelebrationModal {
         } catch {}
     } else {
         Write-Host "$indent$($Script:Colors.Gold)  Changelog Highlights (v$Script:Version):$($Script:Colors.Reset)"
-        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Theme-Matched Telemetry:$($Script:Colors.Gray) Operator, Host, Kernel rotate per session$($Script:Colors.Reset)"
-        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Precision Box Alignment:$($Script:Colors.Gray) Standardized labels & 66-column closed borders$($Script:Colors.Reset)"
-        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Dynamic Centering:$($Script:Colors.Gray) Mathematically centered installer boxes$($Script:Colors.Reset)"
-        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Double-Spaced Prompt:$($Script:Colors.Gray) Clean status breathing room$($Script:Colors.Reset)"
+        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) AI Agent Guard Bypass:$($Script:Colors.Gray) Auto AI bypass active by default ($prefix-config aibypass on|off)$($Script:Colors.Reset)"
+        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) VS Code Animation Control:$($Script:Colors.Gray) Integrated terminal animation toggle ($prefix-config vscode on|off)$($Script:Colors.Reset)"
+        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Configurable Stealth Masking:$($Script:Colors.Gray) Real or cloaked path in stealth mode ($prefix-config maskpath on|off)$($Script:Colors.Reset)"
+        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Interactive Config HUD:$($Script:Colors.Gray) 66-column settings dashboard with instant toggles ($prefix-config)$($Script:Colors.Reset)"
+        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Precision Box Alignment:$($Script:Colors.Gray) Standardized closed borders across all terminal font renderers$($Script:Colors.Reset)"
+        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Release & Download Safety:$($Script:Colors.Gray) Direct GitHub release asset fallback & POSIX profile checks$($Script:Colors.Reset)"
         Write-Host ""
     }
 
@@ -1492,11 +1515,16 @@ function global:phantom-live   { Start-PhantomLiveMonitor }
 function global:phantom-update    { Update-PhantomTerminal }
 function global:phantom-changelog {
     $changelogFile = Join-Path $Script:ConfigDir "latest_changelog.md"
-    if (-not (Test-Path $changelogFile)) {
+    if (-not (Test-Path $changelogFile) -or (Get-Item $changelogFile).Length -lt 20) {
         $candidate = Join-Path $PSScriptRoot "docs\changelogs\v$Script:Version.md"
         if (Test-Path $candidate) { $changelogFile = $candidate }
+        else {
+            $notesCandidate = Join-Path $Script:ConfigDir "release_notes.txt"
+            if (Test-Path $notesCandidate) { $changelogFile = $notesCandidate }
+        }
     }
     $titleBranding = if ($Script:CurrentTheme.Name -eq "Unknown") { "Unknown Terminal" } else { "Phantom Terminal" }
+    $prefix = if ($Script:CurrentTheme.Name -eq "Unknown") { "unknown" } else { "phantom" }
     $bSym = [char]0x2022
     if (Test-Path $changelogFile) {
         Write-Host "`n$($Script:Colors.NeonCyan)=== $titleBranding v$Script:Version Changelog ===$($Script:Colors.Reset)`n"
@@ -1521,7 +1549,13 @@ function global:phantom-changelog {
         }
         Write-Host ""
     } else {
-        Write-Host "$($Script:Colors.DarkGray)No local changelog found for v$Script:Version.$($Script:Colors.Reset)`n"
+        Write-Host "`n$($Script:Colors.NeonCyan)=== $titleBranding v$Script:Version Changelog ===$($Script:Colors.Reset)`n"
+        Write-Host "  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) AI Agent Guard Bypass:$($Script:Colors.Gray) Auto AI bypass active by default ($prefix-config aibypass on|off)$($Script:Colors.Reset)"
+        Write-Host "  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) VS Code Animation Control:$($Script:Colors.Gray) Integrated terminal animation toggle ($prefix-config vscode on|off)$($Script:Colors.Reset)"
+        Write-Host "  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Configurable Stealth Masking:$($Script:Colors.Gray) Real or cloaked path in stealth mode ($prefix-config maskpath on|off)$($Script:Colors.Reset)"
+        Write-Host "  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Interactive Config HUD:$($Script:Colors.Gray) 66-column settings dashboard with instant toggles ($prefix-config)$($Script:Colors.Reset)"
+        Write-Host "  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Precision Box Alignment:$($Script:Colors.Gray) Standardized closed borders across all terminal font renderers$($Script:Colors.Reset)"
+        Write-Host "  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Release & Download Safety:$($Script:Colors.Gray) Direct GitHub release asset fallback & POSIX profile checks$($Script:Colors.Reset)`n"
     }
 }
 function global:unknown-changelog { phantom-changelog }
@@ -1674,16 +1708,16 @@ function global:phantom-config {
     Write-Host "╠════════════════════════════════════════════════════════════════╣$($Script:Colors.Reset)"
 
     $items = @(
-        @{ L = "Startup Animations:     "; V = $(if ($Script:Config.AnimationEnabled) { $onStr } else { $offStr }); C = "$prefix-config animation on|off" },
-        @{ L = "Active Theme:           "; V = "$($Script:Colors.Gold)$($Script:Config.Theme)$($Script:Colors.Reset)      "; C = "$prefix-theme Phantom|Unknown" },
-        @{ L = "Stealth Spoofing:       "; V = $(if ($Script:Config.StealthMode) { $onStr } else { $offStr }); C = "$prefix-stealth on|off" },
-        @{ L = "Stealth Mask Path:      "; V = $(if ($Script:Config.StealthMaskPath) { $onStr } else { $offStr }); C = "$prefix-config maskpath on|off" },
-        @{ L = "AI Agent / CI Bypass:   "; V = $(if ($Script:Config.AIBypass) { $onStr } else { $offStr }); C = "$prefix-config aibypass on|off" },
-        @{ L = "VS Code Animations:     "; V = $(if ($Script:Config.AllowVSCodeAnimations) { $onStr } else { $offStr }); C = "$prefix-config vscode on|off" },
-        @{ L = "Live Hardware Telemetry:"; V = $(if ($Script:Config.LiveStats) { $onStr } else { $offStr }); C = "$prefix-config live on|off" },
-        @{ L = "CPU & RAM Usage Bars:   "; V = $(if ($Script:Config.ShowUsageBars) { $onStr } else { $offStr }); C = "$prefix-config bars on|off" },
-        @{ L = "Smart Suggestions:      "; V = $(if ($Script:Config.SmartSuggestions) { $onStr } else { $offStr }); C = "$prefix-config suggestions on|off" },
-        @{ L = "Full Path in Prompt:    "; V = $(if ($Script:Config.ShowFullPath) { $onStr } else { $offStr }); C = "$prefix-config fullpath on|off" }
+        @{ L = "Startup Animations:     "; V = $(if ($Script:Config.AnimationEnabled) { $onStr } else { $offStr }); C = "$($prefix)-config animation on|off" },
+        @{ L = "Active Theme:           "; V = "$($Script:Colors.Gold)$($Script:Config.Theme)$($Script:Colors.Reset)      "; C = "$($prefix)-theme Phantom|Unknown" },
+        @{ L = "Stealth Spoofing:       "; V = $(if ($Script:Config.StealthMode) { $onStr } else { $offStr }); C = "$($prefix)-stealth on|off" },
+        @{ L = "Stealth Mask Path:      "; V = $(if ($Script:Config.StealthMaskPath) { $onStr } else { $offStr }); C = "$($prefix)-config maskpath on|off" },
+        @{ L = "AI Agent / CI Bypass:   "; V = $(if ($Script:Config.AIBypass) { $onStr } else { $offStr }); C = "$($prefix)-config aibypass on|off" },
+        @{ L = "VS Code Animations:     "; V = $(if ($Script:Config.AllowVSCodeAnimations) { $onStr } else { $offStr }); C = "$($prefix)-config vscode on|off" },
+        @{ L = "Live Hardware Telemetry:"; V = $(if ($Script:Config.LiveStats) { $onStr } else { $offStr }); C = "$($prefix)-config live on|off" },
+        @{ L = "CPU and RAM Usage Bars: "; V = $(if ($Script:Config.ShowUsageBars) { $onStr } else { $offStr }); C = "$($prefix)-config bars on|off" },
+        @{ L = "Smart Suggestions:      "; V = $(if ($Script:Config.SmartSuggestions) { $onStr } else { $offStr }); C = "$($prefix)-config suggestions on|off" },
+        @{ L = "Full Path in Prompt:    "; V = $(if ($Script:Config.ShowFullPath) { $onStr } else { $offStr }); C = "$($prefix)-config fullpath on|off" }
     )
 
     foreach ($it in $items) {
@@ -1691,10 +1725,10 @@ function global:phantom-config {
     }
 
     Write-Host "$($Script:Colors.NeonPurple)╚════════════════════════════════════════════════════════════════╝$($Script:Colors.Reset)"
-    $cGold = $Script:Colors.Gold
-    $cDk = $Script:Colors.DarkGray
-    $cRst = $Script:Colors.Reset
-    Write-Host "`n${cDk}Commands: ${cGold}$prefix-config [setting] on|off ${cDk}| ${cGold}$prefix-config -Edit ${cDk}| ${cGold}$prefix-config -Reset${cRst}`n"
+    $sep = [char]124
+    Write-Host ""
+    Write-Host "  $($Script:Colors.DarkGray)Commands: $($Script:Colors.Gold)${prefix}-config (setting) on/off $($Script:Colors.DarkGray)$sep $($Script:Colors.Gold)${prefix}-config -Edit $($Script:Colors.DarkGray)$sep $($Script:Colors.Gold)${prefix}-config -Reset$($Script:Colors.Reset)"
+    Write-Host ""
 }
 
 function global:phantom-theme {
@@ -1800,7 +1834,7 @@ function global:phantom-secrets {
     }
 
     if ("2829" -in $Script:SecretsFound) {
-        Write-Host "  [+] $p-2829    -- Creator's Mark" -ForegroundColor Green
+        Write-Host "  [+] $p-2829    -- Creator Mark" -ForegroundColor Green
     } else {
         Write-Host "  [?] ???" -ForegroundColor DarkGray
     }

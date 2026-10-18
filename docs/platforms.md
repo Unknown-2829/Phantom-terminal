@@ -1,6 +1,6 @@
 # Platform Support & Architecture
 
-Phantom Terminal v4.0.0 delivers pure native shell performance across Windows, Linux, macOS, and Termux with complete feature parity and **zero mandatory external dependencies**.
+Phantom Terminal v4.2.2 "Krypton" delivers pure native shell performance across Windows, Linux, macOS, and Termux with complete feature parity and **zero mandatory external dependencies**.
 
 ## Supported Platforms
 

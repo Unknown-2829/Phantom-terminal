@@ -8,19 +8,19 @@ Phantom Terminal features automated native installers with zero dependencies. No
 
 Using `curl`:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.sh | bash
 ```
 
 Using `wget`:
 ```bash
-wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.sh | bash
 ```
 
 ### PowerShell (Windows, Linux, macOS)
 
 In Windows PowerShell or PowerShell Core:
 ```powershell
-irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.ps1 | iex
+irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.ps1 | iex
 ```
 
 ### 🛡️ Two-Step Checksum Verification
@@ -29,22 +29,22 @@ To verify download integrity against in-transit corruption or transfer errors pr
 
 **Linux / Android Termux:**
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh
-curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/SHA256SUMS
+curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.sh
+curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/SHA256SUMS
 grep "install.sh" SHA256SUMS | sha256sum -c - && bash install.sh
 ```
 
 **macOS / BSD:**
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh
-curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/SHA256SUMS
+curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.sh
+curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/SHA256SUMS
 grep "install.sh" SHA256SUMS | shasum -a 256 -c - && bash install.sh
 ```
 
 **Windows PowerShell:**
 ```powershell
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.ps1" -OutFile install.ps1
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/SHA256SUMS" -OutFile SHA256SUMS
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.ps1" -OutFile install.ps1
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/SHA256SUMS" -OutFile SHA256SUMS
 $expected = (Get-Content SHA256SUMS | Where-Object { $_ -match '\s+install\.ps1$' } | ForEach-Object { ($_ -split '\s+')[0] })
 if ((Get-FileHash install.ps1 -Algorithm SHA256).Hash.ToLower() -eq $expected.ToLower()) { .\install.ps1 } else { throw "Checksum mismatch" }
 ```
@@ -89,8 +89,10 @@ $env:CI = "true"; .\install.ps1
    - **Bash / Zsh**:
      ```bash
      # >>> Phantom Terminal START >>>
-     if [ -f "$HOME/.phantom-terminal/PhantomStartup.sh" ]; then
-         source "$HOME/.phantom-terminal/PhantomStartup.sh"
+     if [ -n "${BASH_VERSION:-}" ] || [ -n "${ZSH_VERSION:-}" ]; then
+         if [ -f "$HOME/.phantom-terminal/PhantomStartup.sh" ]; then
+             . "$HOME/.phantom-terminal/PhantomStartup.sh"
+         fi
      fi
      # <<< Phantom Terminal END <<<
      ```

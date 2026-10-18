@@ -4,6 +4,26 @@ All notable changes to Phantom Terminal will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [4.2.2 "Krypton"] - 2026-10-18
+
+### Fixed
+- **Precision Title Box Alignment (`Show-UpdateCelebrationModal` & `show_update_celebration`)**:
+  - Implemented terminal visual cell width compensation for `⚡` (U+26A1) emojis (which occupy 2 display cells in terminal font renderers but count as 1 character in .NET `.Length` and `wc -m`).
+  - Standardized inner line padding to exactly 66 columns, eliminating the 2-column border hang over the right box boundary.
+- **Upgrade Screen Changelog Resilience**:
+  - Added direct caching of GitHub API release notes to `latest_changelog.md` and `release_notes.txt` during `phantom-update`, preventing fallback to outdated changelog highlights when CDN caches 404s on newly tagged releases.
+  - Refreshed built-in fallback changelog highlights to reflect Krypton v4.2 features.
+- **Piped Execution Crash Fix in `install.sh`**:
+  - Resolved `bash: line 220: BASH_SOURCE[0]: unbound variable` when piped via `curl -fsSL ... | bash` under `set -u` by guarding `${BASH_SOURCE[0]:-}` and deriving script directory safely.
+- **Multi-Tier Release Download Asset Fallback**:
+  - `phantom-update` and installers now query official GitHub Release Asset URLs (`github.com/.../releases/download/...`) first with automatic fallback to raw repository URLs, eliminating release asset download failures during GitHub CDN propagation latency.
+- **POSIX Profile Compatibility & Fail-Closed Checks**:
+  - Replaced non-POSIX `source` command with `. "$INSTALL_PATH"` guarded by `BASH_VERSION` / `ZSH_VERSION` checks in `install.sh`, preventing syntax errors on POSIX shells like `dash`.
+  - Added atomic verification to ensure startup hooks exist on disk before reporting installation success.
+- **Configuration Corruption Safety**:
+  - Added corruption detection in `Get-PhantomConfig` (PowerShell) and `load_config` (Bash) that creates a timestamped `.corrupt` backup and warns the user without overwriting or destroying original settings.
+
 ## [4.2.1 "Krypton"] - 2026-10-18
 
 ### Added

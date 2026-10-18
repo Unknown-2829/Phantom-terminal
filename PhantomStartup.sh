@@ -7,7 +7,7 @@
 # GitHub   : https://github.com/Unknown-2829/Phantom-terminal
 #
 
-SCRIPT_VERSION="4.2.1"
+SCRIPT_VERSION="4.2.2"
 SCRIPT_CODENAME="Krypton"
 SCRIPT_FULL_VERSION="v${SCRIPT_VERSION} \"${SCRIPT_CODENAME}\""
 REPO_OWNER="Unknown-2829"
@@ -125,11 +125,19 @@ fi
 _vlen() {
     local text="$1"
     local clean; clean=$(printf '%s' "$text" | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g')
+    local len
     if [[ -n "$_PHANTOM_LOCALE" ]]; then
-        printf '%s' "$clean" | LC_ALL="$_PHANTOM_LOCALE" wc -m 2>/dev/null | tr -d ' \n\r' || printf '%s' "$clean" | wc -m | tr -d ' \n\r'
+        len=$(printf '%s' "$clean" | LC_ALL="$_PHANTOM_LOCALE" wc -m 2>/dev/null | tr -d ' \n\r' || printf '%s' "$clean" | wc -m | tr -d ' \n\r')
     else
-        printf '%s' "$clean" | wc -m | tr -d ' \n\r'
+        len=$(printf '%s' "$clean" | wc -m | tr -d ' \n\r')
     fi
+    # Compensate for 2-column wide emojis that wc -m counts as 1 character (such as ⚡ U+26A1)
+    if [[ "$clean" == *"⚡"* ]]; then
+        local count_lightning
+        count_lightning=$(printf '%s' "$clean" | grep -o "⚡" 2>/dev/null | wc -l | tr -d ' \n\r' || echo 0)
+        len=$(( len + count_lightning ))
+    fi
+    printf '%s' "$len"
 }
 
 # ═══════════════════════════════════════════════════
@@ -145,6 +153,28 @@ load_config() {
     SILENT_UPDATE=false;    UPDATE_CHECK_DAYS=1
 
     if [[ -f "$CONFIG_FILE" ]]; then
+        local config_valid=true
+        if command -v jq &>/dev/null; then
+            if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
+                config_valid=false
+            fi
+        else
+            local first_char last_char
+            first_char=$(grep -o '[^[:space:]]' "$CONFIG_FILE" 2>/dev/null | head -1)
+            last_char=$(grep -o '[^[:space:]]' "$CONFIG_FILE" 2>/dev/null | tail -1)
+            if [[ "$first_char" != "{" || "$last_char" != "}" ]]; then
+                config_valid=false
+            fi
+        fi
+
+        if [[ "$config_valid" == "false" ]]; then
+            local ts; ts=$(date +%Y%m%d%H%M%S 2>/dev/null || echo "$$")
+            local backup_corrupt="${CONFIG_FILE}.corrupt.$ts"
+            cp -f "$CONFIG_FILE" "$backup_corrupt" 2>/dev/null || true
+            echo "  ${BLOOD_RED}[!] Warning: Malformed configuration detected. Backed up to ${backup_corrupt}. Loading defaults.${RESET}"
+            return 0
+        fi
+
         if command -v jq &>/dev/null; then
             ANIMATION_ENABLED=$(jq -r '.AnimationEnabled  // true'      "$CONFIG_FILE" 2>/dev/null || echo true)
             MATRIX_DURATION=$(  jq -r '.MatrixDuration    // 2'         "$CONFIG_FILE" 2>/dev/null || echo 2)
@@ -961,11 +991,16 @@ show_update_celebration() {
     printf "%s%b  %s v%s \"%s\" is now online!%b\n\n" "$ind" "$NEON_GREEN" "$TITLE" "$SCRIPT_VERSION" "$SCRIPT_CODENAME" "$RESET"
 
     local cl_file="$CONFIG_DIR/latest_changelog.md"
-    if [[ ! -f "$cl_file" ]]; then
+    if [[ ! -f "$cl_file" || $(wc -c < "$cl_file" 2>/dev/null || echo 0) -lt 20 ]]; then
         local this_src="${BASH_SOURCE[0]:-${(%):-%x}}"
         local candidate=""
         [[ -n "$this_src" ]] && candidate="$(dirname "$this_src")/docs/changelogs/v$SCRIPT_VERSION.md"
-        [[ -n "$candidate" && -f "$candidate" ]] && cl_file="$candidate"
+        if [[ -n "$candidate" && -f "$candidate" ]]; then
+            cl_file="$candidate"
+        else
+            local notes_candidate="$CONFIG_DIR/release_notes.txt"
+            [[ -f "$notes_candidate" ]] && cl_file="$notes_candidate"
+        fi
     fi
 
     if [[ -f "$cl_file" ]]; then
@@ -986,10 +1021,12 @@ show_update_celebration() {
         echo ""
     else
         printf "%s%b  Changelog Highlights (v%s):%b\n" "$ind" "$GOLD" "$SCRIPT_VERSION" "$RESET"
-        printf "%s  %b•%b %bTheme-Matched Telemetry:%b Operator, Host, Kernel rotate per session%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
-        printf "%s  %b•%b %bPrecision Box Alignment:%b Standardized labels & 66-column closed borders%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
-        printf "%s  %b•%b %bDynamic Centering:%b Mathematically centered installer boxes%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
-        printf "%s  %b•%b %bDouble-Spaced Prompt:%b Clean status breathing room (✔  » )%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
+        printf "%s  %b•%b %bAI Agent Guard Bypass:%b Auto AI bypass active by default (%s-config aibypass on|off)%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$p" "$RESET"
+        printf "%s  %b•%b %bVS Code Animation Control:%b Integrated terminal animation toggle (%s-config vscode on|off)%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$p" "$RESET"
+        printf "%s  %b•%b %bConfigurable Stealth Masking:%b Real or cloaked path in stealth mode (%s-config maskpath on|off)%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$p" "$RESET"
+        printf "%s  %b•%b %bInteractive Config HUD:%b 66-column settings dashboard with instant toggles (%s-config)%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$p" "$RESET"
+        printf "%s  %b•%b %bPrecision Box Alignment:%b Standardized closed borders across all terminal font renderers%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
+        printf "%s  %b•%b %bRelease & Download Safety:%b Direct GitHub release asset fallback & POSIX profile checks%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
         echo ""
     fi
 
@@ -1399,8 +1436,14 @@ _bg_update_check() {
 
     if version_gt "$latest" "$SCRIPT_VERSION"; then
         # Save release notes if present
-        echo "$resp" | grep -o '"body"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"body"[[:space:]]*:[[:space:]]*"\(.*\)"/\1/' | sed 's/\\n/\n/g; s/\\r//g' > "$CONFIG_DIR/release_notes.txt" 2>/dev/null || true
+        local rbody
+        rbody=$(echo "$resp" | grep -o '"body"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"body"[[:space:]]*:[[:space:]]*"\(.*\)"/\1/' | sed 's/\\n/\n/g; s/\\r//g')
+        if [[ -n "$rbody" ]]; then
+            printf '%s\n' "$rbody" > "$CONFIG_DIR/release_notes.txt" 2>/dev/null || true
+            printf '%s\n' "$rbody" > "$CONFIG_DIR/latest_changelog.md" 2>/dev/null || true
+        fi
         # Download changelog markdown if available
+        curl -fsSL --max-time 8 "https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/v$latest/latest_changelog.md" -o "$CONFIG_DIR/latest_changelog.md" 2>/dev/null || \
         curl -fsSL --max-time 8 "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/v$latest/docs/changelogs/v$latest.md" -o "$CONFIG_DIR/latest_changelog.md" 2>/dev/null || true
         save_cache "$now" "$latest" true false "$LAST_SEEN_VERSION"
     else
@@ -1425,7 +1468,13 @@ phantom-update() {
         echo "${GOLD}Updating Phantom Terminal to v$latest...${RESET}"
 
         # Save release notes and changelog markdown
-        echo "$resp" | grep -o '"body"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"body"[[:space:]]*:[[:space:]]*"\(.*\)"/\1/' | sed 's/\\n/\n/g; s/\\r//g' > "$CONFIG_DIR/release_notes.txt" 2>/dev/null || true
+        local rbody
+        rbody=$(echo "$resp" | grep -o '"body"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"body"[[:space:]]*:[[:space:]]*"\(.*\)"/\1/' | sed 's/\\n/\n/g; s/\\r//g')
+        if [[ -n "$rbody" ]]; then
+            printf '%s\n' "$rbody" > "$CONFIG_DIR/release_notes.txt" 2>/dev/null || true
+            printf '%s\n' "$rbody" > "$CONFIG_DIR/latest_changelog.md" 2>/dev/null || true
+        fi
+        curl -fsSL --max-time 8 "https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/v$latest/latest_changelog.md" -o "$CONFIG_DIR/latest_changelog.md" 2>/dev/null || \
         curl -fsSL --max-time 8 "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/v$latest/docs/changelogs/v$latest.md" -o "$CONFIG_DIR/latest_changelog.md" 2>/dev/null || true
 
         # Detect active script installation path dynamically
@@ -1438,19 +1487,26 @@ phantom-update() {
         [[ -f "$sp" ]] && cp "$sp" "${sp}.bak"
 
         # Download strictly by immutable release tag (never from mutable main branch)
+        # Try direct release asset download URL first, falling back to raw URLs
+        local asset_url="https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/v$latest/PhantomStartup.sh"
         local dl_url="https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/v$latest/PhantomStartup.sh"
-        if ! curl -fsSL --max-time 15 "$dl_url" -o "$sp_tmp" 2>/dev/null || [[ ! -s "$sp_tmp" ]]; then
-            dl_url="https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$latest/PhantomStartup.sh"
-            curl -fsSL --max-time 15 "$dl_url" -o "$sp_tmp" 2>/dev/null || true
+        local alt_url="https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$latest/PhantomStartup.sh"
+        if ! curl -fsSL --max-time 20 "$asset_url" -o "$sp_tmp" 2>/dev/null || [[ ! -s "$sp_tmp" ]]; then
+            if ! curl -fsSL --max-time 15 "$dl_url" -o "$sp_tmp" 2>/dev/null || [[ ! -s "$sp_tmp" ]]; then
+                curl -fsSL --max-time 15 "$alt_url" -o "$sp_tmp" 2>/dev/null || true
+            fi
         fi
 
         # Strict fail-closed SHA-256 release checksum verification
         local checksum_ok=false
         local sums_tmp="${sp}.sums"
+        local release_sums_url="https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/v$latest/SHA256SUMS"
         local sums_url="https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/v$latest/SHA256SUMS"
-        if ! curl -fsSL --max-time 10 "$sums_url" -o "$sums_tmp" 2>/dev/null || [[ ! -s "$sums_tmp" ]]; then
-            sums_url="https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$latest/SHA256SUMS"
-            curl -fsSL --max-time 10 "$sums_url" -o "$sums_tmp" 2>/dev/null || true
+        local alt_sums_url="https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$latest/SHA256SUMS"
+        if ! curl -fsSL --max-time 10 "$release_sums_url" -o "$sums_tmp" 2>/dev/null || [[ ! -s "$sums_tmp" ]]; then
+            if ! curl -fsSL --max-time 10 "$sums_url" -o "$sums_tmp" 2>/dev/null || [[ ! -s "$sums_tmp" ]]; then
+                curl -fsSL --max-time 10 "$alt_sums_url" -o "$sums_tmp" 2>/dev/null || true
+            fi
         fi
 
         if [[ -s "$sums_tmp" ]]; then
@@ -1499,14 +1555,23 @@ phantom-update() {
 phantom-changelog() {
     load_config; get_theme_colors
     local cl_file="$CONFIG_DIR/latest_changelog.md"
-    if [[ ! -f "$cl_file" ]]; then
+    if [[ ! -f "$cl_file" || $(wc -c < "$cl_file" 2>/dev/null || echo 0) -lt 20 ]]; then
         local this_src="${BASH_SOURCE[0]:-${(%):-%x}}"
         local candidate=""
         [[ -n "$this_src" ]] && candidate="$(dirname "$this_src")/docs/changelogs/v$SCRIPT_VERSION.md"
-        [[ -n "$candidate" && -f "$candidate" ]] && cl_file="$candidate"
+        if [[ -n "$candidate" && -f "$candidate" ]]; then
+            cl_file="$candidate"
+        else
+            local notes_candidate="$CONFIG_DIR/release_notes.txt"
+            [[ -f "$notes_candidate" ]] && cl_file="$notes_candidate"
+        fi
     fi
     local title_brand="Phantom Terminal"
-    [[ "$THEME" == "Unknown" ]] && title_brand="Unknown Terminal"
+    local p="phantom"
+    if [[ "$THEME" == "Unknown" ]]; then
+        title_brand="Unknown Terminal"
+        p="unknown"
+    fi
     if [[ -f "$cl_file" ]]; then
         echo ""
         echo "${NEON_CYAN}=== $title_brand v$SCRIPT_VERSION Changelog ===${RESET}"
@@ -1535,7 +1600,15 @@ phantom-changelog() {
         done < "$cl_file"
         echo ""
     else
-        echo "${DARK_GRAY}No local changelog found for v$SCRIPT_VERSION.${RESET}"
+        echo ""
+        echo "${NEON_CYAN}=== $title_brand v$SCRIPT_VERSION Changelog ===${RESET}"
+        echo ""
+        printf "  %b•%b %bAI Agent Guard Bypass:%b Auto AI bypass active by default (%s-config aibypass on|off)%b\n" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$p" "$RESET"
+        printf "  %b•%b %bVS Code Animation Control:%b Integrated terminal animation toggle (%s-config vscode on|off)%b\n" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$p" "$RESET"
+        printf "  %b•%b %bConfigurable Stealth Masking:%b Real or cloaked path in stealth mode (%s-config maskpath on|off)%b\n" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$p" "$RESET"
+        printf "  %b•%b %bInteractive Config HUD:%b 66-column settings dashboard with instant toggles (%s-config)%b\n" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$p" "$RESET"
+        printf "  %b•%b %bPrecision Box Alignment:%b Standardized closed borders across all terminal font renderers%b\n" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
+        printf "  %b•%b %bRelease & Download Safety:%b Direct GitHub release asset fallback & POSIX profile checks%b\n" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
         echo ""
     fi
 }

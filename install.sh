@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Phantom Terminal - Universal Native Installer v4.2.1
+# Phantom Terminal - Universal Native Installer v4.2.2
 # Cross-platform installer with automatic platform detection and ZERO external dependencies.
 # Supports: Linux, macOS, Termux (Android), BSD
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.1/install.sh | bash
-#   wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.1/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.sh | bash
+#   wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.sh | bash
 #
 
 set -u
@@ -72,11 +72,13 @@ PLATFORM=$(detect_platform)
 # VARIABLES & PATHS
 # ═══════════════════════════════════════════════════════════════════════════
 
-INSTALL_VERSION="4.2.1"
+INSTALL_VERSION="4.2.2"
 INSTALL_CODENAME="Krypton"
 RELEASE_TAG="v$INSTALL_VERSION"
 REPO_URL="https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/$RELEASE_TAG"
-EXPECTED_SHA256="e71d300f9047948e443919d757abc0d045a868ba99e66f3de8fe8a87afdf8c54"
+ASSET_URL="https://github.com/Unknown-2829/Phantom-terminal/releases/download/$RELEASE_TAG"
+[[ "$REPO_URL" != *"github"* ]] && ASSET_URL="$REPO_URL"
+EXPECTED_SHA256="7ad0783fde39ebaf380762b30afa25b43c607aa11e6f19685baf324d55d3d3ba"
 TARGET_HOME="${PHANTOM_HOME:-${UNKNOWN_HOME:-$HOME}}"
 CONFIG_DIR="$TARGET_HOME/.phantom-terminal"
 CONFIG_FILE="$CONFIG_DIR/config.json"
@@ -170,10 +172,10 @@ choose_shell_profile() {
     local labels=()
 
     if [[ "$PLATFORM" == "macos" ]]; then
-        choices=("$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc")
+        choices=("$TARGET_HOME/.zshrc" "$TARGET_HOME/.bash_profile" "$TARGET_HOME/.bashrc")
         labels=("Zsh (~/.zshrc)" "Bash login (~/.bash_profile)" "Bash interactive (~/.bashrc)")
     else
-        choices=("$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile")
+        choices=("$TARGET_HOME/.bashrc" "$TARGET_HOME/.zshrc" "$TARGET_HOME/.profile")
         labels=("Bash (~/.bashrc)" "Zsh (~/.zshrc)" "POSIX shell (~/.profile)")
     fi
 
@@ -217,7 +219,7 @@ choose_shell_profile() {
 # HEADER
 # ═══════════════════════════════════════════════════════════════════════════
 
-if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" != "${0}" ]]; then
     return 0 2>/dev/null || true
 fi
 
@@ -468,9 +470,12 @@ echo "  ${GREEN}[+] Native shell mode ready (zero external packages required)${R
 echo "  ${CYAN}[2/4]${WHITE} Deploying PhantomStartup.sh...${R}"
 mkdir -p "$CONFIG_DIR" 2>/dev/null || true
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+SCRIPT_DIR=""
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+fi
 stage_path="${INSTALL_PATH}.stage.$$.$RANDOM"
-if [[ -f "$SCRIPT_DIR/PhantomStartup.sh" ]]; then
+if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/PhantomStartup.sh" ]]; then
     # Isolated staging & syntax validation for local deployment
     cp -f "$SCRIPT_DIR/PhantomStartup.sh" "$stage_path"
     if [[ ! -s "$stage_path" ]] || [[ $(wc -c < "$stage_path" 2>/dev/null || echo 0) -lt 1000 ]] || ! grep -q "Phantom Terminal\|PhantomStartup" "$stage_path" 2>/dev/null || ! bash -n "$stage_path" 2>/dev/null; then
@@ -490,13 +495,17 @@ else
     DOWNLOAD_SUCCESS=false
     sums_file="${INSTALL_PATH}.stage.$$.sums"
     if command -v curl &> /dev/null; then
-        if curl -fsSL --connect-timeout 10 --max-time 30 "$REPO_URL/PhantomStartup.sh" -o "$stage_path" 2>/dev/null; then
+        if curl -fsSL --connect-timeout 10 --max-time 30 "$ASSET_URL/PhantomStartup.sh" -o "$stage_path" 2>/dev/null || \
+           curl -fsSL --connect-timeout 10 --max-time 30 "$REPO_URL/PhantomStartup.sh" -o "$stage_path" 2>/dev/null; then
             DOWNLOAD_SUCCESS=true
+            curl -fsSL --connect-timeout 10 --max-time 15 "$ASSET_URL/SHA256SUMS" -o "$sums_file" 2>/dev/null || \
             curl -fsSL --connect-timeout 10 --max-time 15 "$REPO_URL/SHA256SUMS" -o "$sums_file" 2>/dev/null || true
         fi
     elif command -v wget &> /dev/null; then
-        if wget -qO "$stage_path" --timeout=30 "$REPO_URL/PhantomStartup.sh" 2>/dev/null; then
+        if wget -qO "$stage_path" --timeout=30 "$ASSET_URL/PhantomStartup.sh" 2>/dev/null || \
+           wget -qO "$stage_path" --timeout=30 "$REPO_URL/PhantomStartup.sh" 2>/dev/null; then
             DOWNLOAD_SUCCESS=true
+            wget -qO "$sums_file" --timeout=15 "$ASSET_URL/SHA256SUMS" 2>/dev/null || \
             wget -qO "$sums_file" --timeout=15 "$REPO_URL/SHA256SUMS" 2>/dev/null || true
         fi
     fi
@@ -570,17 +579,31 @@ chmod +x "$INSTALL_PATH" 2>/dev/null || true
 
 # Profile setup
 echo "  ${CYAN}[3/4]${WHITE} Configuring profile ($PROFILE)...${R}"
-touch "$PROFILE" 2>/dev/null || true
+if ! touch "$PROFILE" 2>/dev/null; then
+    handle_error "Failed to create or touch profile at $PROFILE (permission denied)."
+    exit 1
+fi
 clean_profile_entries "$PROFILE"
 
-cat >> "$PROFILE" <<EOF
+if ! cat >> "$PROFILE" <<EOF
 
 # >>> Phantom Terminal START >>>
-if [ -f "$INSTALL_PATH" ]; then
-    source "$INSTALL_PATH"
+if [ -n "\${BASH_VERSION:-}" ] || [ -n "\${ZSH_VERSION:-}" ]; then
+    if [ -f "$INSTALL_PATH" ]; then
+        . "$INSTALL_PATH"
+    fi
 fi
 # <<< Phantom Terminal END <<<
 EOF
+then
+    handle_error "Failed to write startup block to $PROFILE."
+    exit 1
+fi
+
+if ! grep -q "# >>> Phantom Terminal START >>>" "$PROFILE" 2>/dev/null; then
+    handle_error "Verification failed: Phantom Terminal startup block not found in $PROFILE."
+    exit 1
+fi
 
 echo "  ${GREEN}[+] Profile updated safely${R}"
 
