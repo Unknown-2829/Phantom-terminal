@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Phantom Terminal - Advanced Native Shell Startup System v4.2.1
+# Phantom Terminal - Advanced Native Shell Startup System v4.2.3
 # Cross-platform startup animation, live telemetry, and privacy spoofing
-# Supports: Linux, macOS, Termux (Android)
+# Supports: Linux, macOS, Termux (Android), BSD
 # Creator  : @unknownlll2829 (Telegram)
 # GitHub   : https://github.com/Unknown-2829/Phantom-terminal
 #
 
-SCRIPT_VERSION="4.2.2"
+SCRIPT_VERSION="4.2.3"
 SCRIPT_CODENAME="Krypton"
 SCRIPT_FULL_VERSION="v${SCRIPT_VERSION} \"${SCRIPT_CODENAME}\""
 REPO_OWNER="Unknown-2829"
@@ -22,13 +22,29 @@ mkdir -p "$CONFIG_DIR"
 # PLATFORM DETECTION
 # ═══════════════════════════════════════════════════
 detect_platform() {
-    if [[ "${OSTYPE:-}" == "linux-android"* ]] || [[ -n "${TERMUX_VERSION:-}" ]]; then
-        echo "termux"
-    elif [[ "${OSTYPE:-}" == "darwin"* ]]; then
-        echo "macos"
-    else
-        echo "linux"
-    fi
+    local u
+    u="$(uname -s 2>/dev/null || echo "${OSTYPE:-}")"
+    case "$u" in
+        Darwin*|darwin*)
+            echo "macos"
+            ;;
+        *Android*|*linux-android*|*android*)
+            echo "termux"
+            ;;
+        FreeBSD*|OpenBSD*|NetBSD*|DragonFly*|*BSD*|*bsd*)
+            echo "bsd"
+            ;;
+        Linux*|linux*)
+            if [[ -n "${TERMUX_VERSION:-}" ]] || [[ "${PREFIX:-}" == *"com.termux"* ]]; then
+                echo "termux"
+            else
+                echo "linux"
+            fi
+            ;;
+        *)
+            echo "linux"
+            ;;
+    esac
 }
 PLATFORM=$(detect_platform)
 
@@ -39,10 +55,17 @@ _is_agent_session() {
     [[ "${PHANTOM_FORCE:-}" == "1" || "${UNKNOWN_FORCE:-}" == "1" ]] && return 1
     [[ "${PHANTOM_QUIET:-}" == "1" || "${UNKNOWN_QUIET:-}" == "1" ]] && return 0
 
-    # VS Code terminal animation control (allowed by default for human users)
-    if [[ "${TERM_PROGRAM:-}" == "vscode" || -n "${VSCODE_INJECTION:-}" || -n "${VSCODE_GIT_IPC_HANDLE:-}" ]]; then
+    # Robust VS Code Detection (all markers across desktop, web, remote, and shell integration)
+    local is_vscode=false
+    if [[ "${TERM_PROGRAM:-}" == "vscode" || -n "${VSCODE_PID:-}" || -n "${VSCODE_IPC_HOOK_CLI:-}" || -n "${VSCODE_INJECTION:-}" || -n "${VSCODE_NONCE:-}" || -n "${VSCODE_CWD:-}" || -n "${VSCODE_SHELL_INTEGRATION:-}" ]]; then
+        is_vscode=true
+    fi
+
+    if [[ "$is_vscode" == "true" ]]; then
         if [[ "${ALLOW_VSCODE_ANIMATIONS:-true}" == "true" ]]; then
-            if [[ -t 0 && -t 1 && $- == *i* ]]; then
+            # In VS Code terminal: if stdout is a terminal, allow animation!
+            # Resilient to login shells (bash -l) where $- doesn't have i yet
+            if [[ -t 1 ]]; then
                 return 1
             fi
         else
@@ -52,17 +75,19 @@ _is_agent_session() {
 
     # Configurable AI Agent Bypass (silent for agents to preserve tokens & reduce clutter)
     if [[ "${AI_BYPASS:-true}" != "true" ]]; then
-        [[ ! -t 0 || ! -t 1 ]] && return 0
-        [[ $- != *i* ]] && return 0
+        [[ ! -t 1 ]] && return 0
         return 1
     fi
 
     [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" || -n "${TF_BUILD:-}" || \
        -n "${GITLAB_CI:-}" || -n "${CURSOR_AGENT:-}" || -n "${CLAUDE_AGENT:-}" || \
-       -n "${AGENT_ENV:-}" || \
-       "${DEBIAN_FRONTEND:-}" == "noninteractive" ]] && return 0
-    [[ ! -t 0 || ! -t 1 ]] && return 0
-    [[ $- != *i* ]] && return 0
+       -n "${AGENT_ENV:-}" || "${DEBIAN_FRONTEND:-}" == "noninteractive" ]] && return 0
+    [[ ! -t 1 ]] && return 0
+    if [[ -n "${BASH_VERSION:-}" ]]; then
+        [[ $- != *i* && -z "${PS1:-}" ]] && return 0
+    elif [[ -n "${ZSH_VERSION:-}" ]]; then
+        [[ ! -o interactive ]] && return 0
+    fi
     return 1
 }
 
@@ -141,8 +166,87 @@ _vlen() {
 }
 
 # ═══════════════════════════════════════════════════
-# CONFIGURATION
+# CONFIGURATION & JSON VALIDATION
 # ═══════════════════════════════════════════════════
+_validate_json_file() {
+    local target="$1"
+    [[ ! -f "$target" ]] && return 1
+    [[ ! -s "$target" ]] && return 1
+
+    # Tier 1: System JSON parsers
+    if command -v jq &>/dev/null; then
+        jq empty "$target" 2>/dev/null && return 0 || return 1
+    fi
+    if command -v python3 &>/dev/null; then
+        python3 -c "import json, sys; json.load(open(sys.argv[1]))" "$target" 2>/dev/null && return 0 || return 1
+    fi
+    if command -v python &>/dev/null; then
+        python -c "import json, sys; json.load(open(sys.argv[1]))" "$target" 2>/dev/null && return 0 || return 1
+    fi
+    if command -v node &>/dev/null; then
+        node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$target" 2>/dev/null && return 0 || return 1
+    fi
+    if command -v perl &>/dev/null; then
+        perl -MJSON::PP -e "JSON::PP::decode_json(do { local \$/; <> })" "$target" 2>/dev/null && return 0 || return 1
+    fi
+
+    # Tier 2: POSIX structural JSON validator using awk
+    awk '
+    BEGIN {
+        brace_count = 0;
+        bracket_count = 0;
+        in_string = 0;
+        escape = 0;
+        first_char = "";
+        last_char = "";
+        valid = 1;
+    }
+    {
+        line = $0;
+        len = length(line);
+        for (i = 1; i <= len; i++) {
+            c = substr(line, i, 1);
+            if (first_char == "" && c ~ /[^ \t\r\n]/) {
+                first_char = c;
+            }
+            if (c ~ /[^ \t\r\n]/) {
+                last_char = c;
+            }
+            if (in_string) {
+                if (escape) {
+                    escape = 0;
+                } else if (c == "\\") {
+                    escape = 1;
+                } else if (c == "\"") {
+                    in_string = 0;
+                }
+            } else {
+                if (c == "\"") {
+                    in_string = 1;
+                } else if (c == "{") {
+                    brace_count++;
+                } else if (c == "}") {
+                    brace_count--;
+                    if (brace_count < 0) { valid = 0; exit; }
+                } else if (c == "[") {
+                    bracket_count++;
+                } else if (c == "]") {
+                    bracket_count--;
+                    if (bracket_count < 0) { valid = 0; exit; }
+                }
+            }
+        }
+    }
+    END {
+        if (!valid || in_string || brace_count != 0 || bracket_count != 0 || first_char != "{" || last_char != "}") {
+            exit 1;
+        }
+        exit 0;
+    }
+    ' "$target" 2>/dev/null
+    return $?
+}
+
 load_config() {
     ANIMATION_ENABLED=true; MATRIX_DURATION=2;  MATRIX_MODE="Letters"
     SECURITY_LOAD_STEPS=8;  GLITCH_INTENSITY=3;  SHOW_SYSTEM_INFO=true
@@ -153,21 +257,7 @@ load_config() {
     SILENT_UPDATE=false;    UPDATE_CHECK_DAYS=1
 
     if [[ -f "$CONFIG_FILE" ]]; then
-        local config_valid=true
-        if command -v jq &>/dev/null; then
-            if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
-                config_valid=false
-            fi
-        else
-            local first_char last_char
-            first_char=$(grep -o '[^[:space:]]' "$CONFIG_FILE" 2>/dev/null | head -1)
-            last_char=$(grep -o '[^[:space:]]' "$CONFIG_FILE" 2>/dev/null | tail -1)
-            if [[ "$first_char" != "{" || "$last_char" != "}" ]]; then
-                config_valid=false
-            fi
-        fi
-
-        if [[ "$config_valid" == "false" ]]; then
+        if ! _validate_json_file "$CONFIG_FILE"; then
             local ts; ts=$(date +%Y%m%d%H%M%S 2>/dev/null || echo "$$")
             local backup_corrupt="${CONFIG_FILE}.corrupt.$ts"
             cp -f "$CONFIG_FILE" "$backup_corrupt" 2>/dev/null || true
@@ -557,6 +647,20 @@ get_system_stats() {
                 [[ $tot -gt 0 ]] && ram=$(( (${pa:-0}+${pw:-0})*100/tot ))
             fi
             ;;
+        bsd)
+            if command -v top &>/dev/null; then
+                local idle; idle=$(top -b -d 1 2>/dev/null | awk '/CPU:/{for(i=1;i<=NF;i++) if($i ~ /%$/ && $(i+1) ~ /idle/) {gsub(/%/,"",$i); print $i; exit}}')
+                [[ -n "$idle" && "$idle" =~ ^[0-9]+(\.[0-9]+)?$ ]] && cpu=$(( 100 - ${idle%.*} ))
+            fi
+            if command -v sysctl &>/dev/null; then
+                local physmem usermem
+                physmem=$(sysctl -n hw.physmem 2>/dev/null)
+                usermem=$(sysctl -n hw.usermem 2>/dev/null)
+                if [[ -n "$physmem" && -n "$usermem" && "$physmem" -gt 0 ]]; then
+                    ram=$(( usermem * 100 / physmem ))
+                fi
+            fi
+            ;;
         linux|termux)
             cpu=$(_cpu_linux)
             if [[ -r /proc/meminfo ]]; then
@@ -611,6 +715,7 @@ show_dashboard() {
     case "$PLATFORM" in
         termux) os="Termux (Android)" ;;
         macos)  os="macOS $(sw_vers -productVersion 2>/dev/null)" ;;
+        bsd)    os="$(uname -s) $(uname -r)" ;;
         linux)
             if [[ -f /etc/os-release ]]; then
                 os=$(. /etc/os-release && echo "${PRETTY_NAME:-Linux}")
@@ -628,7 +733,7 @@ show_dashboard() {
         local secs; secs=$(awk '{print int($1)}' /proc/uptime)
         local d=$(( secs/86400 )) h=$(( (secs%86400)/3600 )) m=$(( (secs%3600)/60 ))
         [[ $d -gt 0 ]] && uptime_str="${d}d ${h}h ${m}m" || uptime_str="${h}h ${m}m"
-    elif [[ "$PLATFORM" == "macos" ]]; then
+    elif [[ "$PLATFORM" == "macos" || "$PLATFORM" == "bsd" ]]; then
         local btime; btime=$(sysctl -n kern.boottime 2>/dev/null | awk -F'[sec = |,]' '{print $4}')
         if [[ -n "$btime" && "$btime" =~ ^[0-9]+$ ]]; then
             local now; now=$(date +%s)
@@ -1059,12 +1164,36 @@ start_phantom_terminal() {
     UPDATE_AVAILABLE=false
     save_cache "$LAST_UPDATE_CHECK" "$LATEST_VERSION" false false "$SCRIPT_VERSION"
 
-    if [[ (-n "${PHANTOM_SESSION_ACTIVE:-}" || -n "${UNKNOWN_SESSION_ACTIVE:-}") && "$force" == "false" ]]; then
+    # Session state tracking to prevent nested shell loops while allowing new terminals/tabs
+    local is_nested=false
+    local current_tty; current_tty="$(tty 2>/dev/null || echo "")"
+    if [[ "$force" == "false" ]]; then
+        if [[ -n "${PHANTOM_SESSION_PID:-}" || -n "${UNKNOWN_SESSION_PID:-}" ]]; then
+            local sess_pid="${PHANTOM_SESSION_PID:-${UNKNOWN_SESSION_PID:-}}"
+            local sess_tty="${PHANTOM_SESSION_TTY:-${UNKNOWN_SESSION_TTY:-}}"
+            if [[ "$sess_pid" == "$$" ]]; then
+                # Same shell reloaded
+                is_nested=true
+            elif [[ -n "${PPID:-}" && "$PPID" == "$sess_pid" ]]; then
+                # Direct child subshell inside the same shell
+                is_nested=true
+            elif [[ -n "$sess_tty" && -n "$current_tty" && "$sess_tty" == "$current_tty" && "$current_tty" != *"not a tty"* ]]; then
+                # Nested subshell sharing the exact same TTY device
+                is_nested=true
+            fi
+        fi
+    fi
+
+    if [[ "$is_nested" == "true" ]]; then
         show_dashboard
         return
     fi
     export PHANTOM_SESSION_ACTIVE="1"
     export UNKNOWN_SESSION_ACTIVE="1"
+    export PHANTOM_SESSION_PID="$$"
+    export UNKNOWN_SESSION_PID="$$"
+    export PHANTOM_SESSION_TTY="$current_tty"
+    export UNKNOWN_SESSION_TTY="$current_tty"
 
     [[ "$ANIMATION_ENABLED" != "true" && "$force" == "false" ]] && { show_dashboard; return; }
 

@@ -1,6 +1,6 @@
 # Platform Support & Architecture
 
-Phantom Terminal v4.2.2 "Krypton" delivers pure native shell performance across Windows, Linux, macOS, and Termux with complete feature parity and **zero mandatory external dependencies**.
+Phantom Terminal v4.2.3 "Krypton" delivers pure native shell performance across Windows, Linux, macOS, Termux, and BSD with complete feature parity and **zero mandatory external dependencies**.
 
 ## Supported Platforms
 
@@ -11,7 +11,7 @@ Phantom Terminal v4.2.2 "Krypton" delivers pure native shell performance across 
 | **Linux (All Distros)** | Bash 3.2+ / Zsh | Standard shell | Dual-sample `/proc/stat` delta & `/proc/meminfo` | ✅ Full Support |
 | **macOS (Intel & Apple Silicon)** | Zsh / Bash 3.2+ | Default Terminal / iTerm2 | Native `top` & `vm_stat` hardware metrics | ✅ Full Support |
 | **Android (Termux)** | Bash / Zsh | Termux environment | Calibrated `/proc/stat` delta & mobile auto-scaling | ✅ Full Support |
-| **BSD (FreeBSD / OpenBSD)** | Bash / POSIX shell | Standard shell | POSIX system metrics | ✅ Full Support |
+| **BSD (FreeBSD / OpenBSD / NetBSD / DragonFly)** | Bash / POSIX shell | Standard shell | Native BSD sysctl & top metrics | ✅ Full Support |
 
 ---
 
@@ -51,22 +51,27 @@ Unlike traditional CLI enhancement tools, Phantom Terminal requires:
 - Auto-scales dashboard layout when terminal width is narrower than 60 columns.
 - Runs entirely without root or proot privileges.
 
+### BSD (FreeBSD / OpenBSD / NetBSD / DragonFly)
+- Explicit platform recognition in `detect_platform()` across FreeBSD, OpenBSD, NetBSD, and DragonFly BSD.
+- Native hardware queries: RAM utilization calculated from `hw.physmem` and `hw.usermem` via `sysctl`, CPU via batch-mode `top -b -d 1`, and uptime via `sysctl -n kern.boottime`.
+- POSIX-compliant script execution with zero GNU extensions required.
+
 ---
 
 ## 📊 Feature Comparison Matrix
 
-| Feature | Windows | Linux | macOS | Termux |
-|---|:---:|:---:|:---:|:---:|
-| **Matrix Rain Animation** | ✅ | ✅ | ✅ | ✅ (Optimized) |
-| **Binary Rain Mode (`0101...`)** | ✅ | ✅ | ✅ | ✅ |
-| **Glitch Logo Reveal** | ✅ | ✅ | ✅ | ✅ |
-| **Dual Themes (`Phantom` / `Unknown`)** | ✅ | ✅ | ✅ | ✅ |
-| **Instant Keypress Skip** | ✅ | ✅ | ✅ | ✅ |
-| **AI Agent Guard (CI / Claude / Cursor)** | ✅ | ✅ | ✅ | ✅ |
-| **Cyberpunk Stealth Mode** | ✅ | ✅ | ✅ | ✅ |
-| **Live Telemetry HUD (`phantom-top`)** | ✅ | ✅ | ✅ | ✅ |
-| **Universal History Search (`phantom-search`)** | ✅ | ✅ | ✅ | ✅ |
-| **Non-blocking Git Branch Detection** | ✅ | ✅ | ✅ | ✅ |
-| **Persistent Secrets Tracker** | ✅ | ✅ | ✅ | ✅ |
-| **Safe Bounded Profile Hooks** | ✅ | ✅ | ✅ | ✅ |
-| **Zero External Dependencies** | ✅ | ✅ | ✅ | ✅ |
+| Feature | Windows | Linux | macOS | Termux | BSD |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **Matrix Rain Animation** | ✅ | ✅ | ✅ | ✅ (Optimized) | ✅ |
+| **Binary Rain Mode (`0101...`)** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Glitch Logo Reveal** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Dual Themes (`Phantom` / `Unknown`)** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Instant Keypress Skip** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **AI Agent Guard (CI / Claude / Cursor)** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Cyberpunk Stealth Mode** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Live Telemetry HUD (`phantom-top`)** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Universal History Search (`phantom-search`)** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Non-blocking Git Branch Detection** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Persistent Secrets Tracker** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Safe Bounded Profile Hooks** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Zero External Dependencies** | ✅ | ✅ | ✅ | ✅ | ✅ |

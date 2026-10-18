@@ -1,19 +1,19 @@
 <#
 .SYNOPSIS
-    Phantom Terminal - Fast Native Installer v4.2.2
+    Phantom Terminal - Fast Native Installer v4.2.3
 .DESCRIPTION
     High-performance installer with robust config persistence and profile safety.
-    Run: irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.ps1 | iex
+    Run: irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.3/install.ps1 | iex
 #>
 
 # Fast init
 $ErrorActionPreference = "Stop"
-$InstallVersion = "4.2.2"
+$InstallVersion = "4.2.3"
 $InstallCodename = "Krypton"
 $ReleaseTag = "v$InstallVersion"
 $RepoUrl = "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/$ReleaseTag"
 $AssetUrl = if ($RepoUrl -like "*github*") { "https://github.com/Unknown-2829/Phantom-terminal/releases/download/$ReleaseTag" } else { $RepoUrl }
-$ExpectedSha256 = "24c29a2e71982f65c51a618a5adb0782a87a7213e7c843fd2e91ee5c83dd175e"
+$ExpectedSha256 = "2505cf46365b856fc819985caa68c2310bcda2d1a37bc6aeb48b70e9e4d1d2bd"
 $UserHome = if ($env:PHANTOM_HOME) { $env:PHANTOM_HOME } elseif ($env:UNKNOWN_HOME) { $env:UNKNOWN_HOME } elseif ($HOME) { $HOME } elseif ($env:USERPROFILE) { $env:USERPROFILE } else { [Environment]::GetFolderPath('UserProfile') }
 $ConfigDir = Join-Path $UserHome ".phantom-terminal"
 $InstallPath = Join-Path $ConfigDir "PhantomStartup.ps1"
@@ -59,6 +59,7 @@ function Remove-PhantomProfileEntries {
 
 # Fast config load
 $cfg = @{
+    AnimationEnabled      = $true
     Theme                 = "Phantom"
     MatrixMode            = "Letters"
     ShowFullPath          = $true
@@ -75,22 +76,32 @@ $cfg = @{
 }
 
 if (Test-Path $ConfigFile) {
-    try {
-        $json = Get-Content $ConfigFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-        if ($json.Theme) { $cfg.Theme = [string]$json.Theme }
-        if ($json.MatrixMode) { $cfg.MatrixMode = [string]$json.MatrixMode }
-        if ($null -ne $json.ShowFullPath) { $cfg.ShowFullPath = [bool]$json.ShowFullPath }
-        if ($null -ne $json.GradientText) { $cfg.GradientText = [bool]$json.GradientText }
-        if ($null -ne $json.AutoCheckUpdates) { $cfg.AutoCheckUpdates = [bool]$json.AutoCheckUpdates }
-        if ($null -ne $json.ShowSystemInfo) { $cfg.ShowSystemInfo = [bool]$json.ShowSystemInfo }
-        if ($null -ne $json.SmartSuggestions) { $cfg.SmartSuggestions = [bool]$json.SmartSuggestions }
-        if ($null -ne $json.StealthMode) { $cfg.StealthMode = [bool]$json.StealthMode }
-        if ($null -ne $json.StealthMaskPath) { $cfg.StealthMaskPath = [bool]$json.StealthMaskPath }
-        if ($null -ne $json.AIBypass) { $cfg.AIBypass = [bool]$json.AIBypass }
-        if ($null -ne $json.AllowVSCodeAnimations) { $cfg.AllowVSCodeAnimations = [bool]$json.AllowVSCodeAnimations }
-        if ($null -ne $json.LiveStats) { $cfg.LiveStats = [bool]$json.LiveStats }
-        if ($null -ne $json.ShowUsageBars) { $cfg.ShowUsageBars = [bool]$json.ShowUsageBars }
-    } catch {}
+    $rawContent = Get-Content $ConfigFile -Raw -ErrorAction SilentlyContinue
+    if (-not [string]::IsNullOrWhiteSpace($rawContent)) {
+        try {
+            $json = $rawContent | ConvertFrom-Json -ErrorAction Stop
+            if ($null -ne $json.AnimationEnabled) { $cfg.AnimationEnabled = [bool]$json.AnimationEnabled }
+            if ($json.Theme) { $cfg.Theme = [string]$json.Theme }
+            if ($json.MatrixMode) { $cfg.MatrixMode = [string]$json.MatrixMode }
+            if ($null -ne $json.ShowFullPath) { $cfg.ShowFullPath = [bool]$json.ShowFullPath }
+            if ($null -ne $json.GradientText) { $cfg.GradientText = [bool]$json.GradientText }
+            if ($null -ne $json.AutoCheckUpdates) { $cfg.AutoCheckUpdates = [bool]$json.AutoCheckUpdates }
+            if ($null -ne $json.ShowSystemInfo) { $cfg.ShowSystemInfo = [bool]$json.ShowSystemInfo }
+            if ($null -ne $json.SmartSuggestions) { $cfg.SmartSuggestions = [bool]$json.SmartSuggestions }
+            if ($null -ne $json.StealthMode) { $cfg.StealthMode = [bool]$json.StealthMode }
+            if ($null -ne $json.StealthMaskPath) { $cfg.StealthMaskPath = [bool]$json.StealthMaskPath }
+            if ($null -ne $json.AIBypass) { $cfg.AIBypass = [bool]$json.AIBypass }
+            if ($null -ne $json.AllowVSCodeAnimations) { $cfg.AllowVSCodeAnimations = [bool]$json.AllowVSCodeAnimations }
+            if ($null -ne $json.LiveStats) { $cfg.LiveStats = [bool]$json.LiveStats }
+            if ($null -ne $json.ShowUsageBars) { $cfg.ShowUsageBars = [bool]$json.ShowUsageBars }
+        } catch {
+            $ts = Get-Date -Format "yyyyMMddHHmmss"
+            $corruptBackup = "$ConfigFile.corrupt.$ts"
+            try { Copy-Item -Path $ConfigFile -Destination $corruptBackup -Force } catch {}
+            Write-Host "  $Red$b_x Warning: Malformed configuration detected. Backed up to $corruptBackup. Loading defaults.$R"
+            Write-Host ""
+        }
+    }
 }
 
 # Header
@@ -117,7 +128,26 @@ if ($isReinstall) {
     Write-Host ""
 }
 
+# Installation Mode Selection
+$InstallMode = "1"
 if ($isInteractive) {
+    Write-Host "  $Gold$b_star INSTALLATION MODE:$R"
+    Write-Host "  $Cyan$b_1 Express Install (Recommended)$R $Gray- Fast setup with defaults / preserved settings$R"
+    Write-Host "  $Purple$b_2 Custom / Interactive Setup$R   $Gray- Step-by-step configuration wizard$R"
+    Write-Host ""
+    Write-Host "  Choice [Enter=1]: " -NoNewline
+    $cMode = Read-Host
+    if ($cMode -eq "2") { $InstallMode = "2" } else { $InstallMode = "1" }
+    Write-Host ""
+} else {
+    $InstallMode = "1"
+    Write-Host "  $Green$b_plus Running in non-interactive/Express mode with default configuration$R"
+    Write-Host ""
+}
+
+if ($InstallMode -eq "2") {
+    Write-Host "  $Gold─── CUSTOM CONFIGURATION WIZARD ───$R"; Write-Host ""
+
     # === THEME ===
     Write-Host "  $Gold$b_1 THEME$R"
     $d1 = if ($cfg.Theme -eq "Unknown") { "2" } else { "1" }
@@ -147,38 +177,68 @@ if ($isInteractive) {
     $selPathStr = if ($ShowFullPath) { "Full path" } else { "Folder only" }
     Write-Host "  $Green→ $selPathStr$R"; Write-Host ""
 
-    # === OPTIONS ===
-    Write-Host "  $Gold$b_4 OPTIONS$R"
-
-    $dS = if ($cfg.ShowSystemInfo -eq $false) { "n" } else { "Y" }
-    Write-Host "  Show system info? [Y/n, Enter=$dS]: " -NoNewline
-    $c = Read-Host; if (-not $c) { $c = $dS }
-    $ShowSystemInfo = $c -ne "n" -and $c -ne "N"
+    # === ANIMATIONS & VISUALS ===
+    Write-Host "  $Gold$b_4 ANIMATIONS & VISUALS$R"
+    $dAni = if ($cfg.AnimationEnabled -eq $false) { "n" } else { "Y" }
+    Write-Host "  Enable startup animations? [Y/n, Enter=$dAni]: " -NoNewline
+    $c = Read-Host; if (-not $c) { $c = $dAni }
+    $AnimationEnabled = $c -ne "n" -and $c -ne "N"
 
     $dG = if ($cfg.GradientText) { "Y" } else { "n" }
     Write-Host "  Gradient logo? [Y/n, Enter=$dG]: " -NoNewline
     $c = Read-Host; if (-not $c) { $c = $dG }
     $GradientText = $c -ne "n" -and $c -ne "N"
+    Write-Host ""
 
-    $dA = if ($cfg.AutoCheckUpdates) { "Y" } else { "n" }
-    Write-Host "  Auto-update check? [Y/n, Enter=$dA]: " -NoNewline
-    $c = Read-Host; if (-not $c) { $c = $dA }
-    $AutoUpdate = $c -ne "n" -and $c -ne "N"
+    # === AI GUARD & DEVELOPER SETTINGS ===
+    Write-Host "  $Gold$b_1 AI GUARD & DEVELOPER SETTINGS$R"
+    $dAI = if ($cfg.AIBypass -eq $false) { "n" } else { "Y" }
+    Write-Host "  Auto-bypass in AI coding agents / CI? [Y/n, Enter=$dAI]: " -NoNewline
+    $c = Read-Host; if (-not $c) { $c = $dAI }
+    $AIBypass = $c -ne "n" -and $c -ne "N"
+
+    $dVSC = if ($cfg.AllowVSCodeAnimations -eq $false) { "n" } else { "Y" }
+    Write-Host "  Allow animations in VS Code terminal? [Y/n, Enter=$dVSC]: " -NoNewline
+    $c = Read-Host; if (-not $c) { $c = $dVSC }
+    $AllowVSCodeAnimations = $c -ne "n" -and $c -ne "N"
+    Write-Host ""
+
+    # === TELEMETRY & FEATURES ===
+    Write-Host "  $Gold$b_2 TELEMETRY & FEATURES$R"
+    $dS = if ($cfg.ShowSystemInfo -eq $false) { "n" } else { "Y" }
+    Write-Host "  Show system info? [Y/n, Enter=$dS]: " -NoNewline
+    $c = Read-Host; if (-not $c) { $c = $dS }
+    $ShowSystemInfo = $c -ne "n" -and $c -ne "N"
+
+    $dUB = if ($cfg.ShowUsageBars -eq $false) { "n" } else { "Y" }
+    Write-Host "  Show real-time CPU & RAM usage bars? [Y/n, Enter=$dUB]: " -NoNewline
+    $c = Read-Host; if (-not $c) { $c = $dUB }
+    $ShowUsageBars = $c -ne "n" -and $c -ne "N"
 
     $dSS = if ($cfg.SmartSuggestions -eq $false) { "n" } else { "Y" }
     Write-Host "  Smart Suggestions? [Y/n, Enter=$dSS]: " -NoNewline
     $c = Read-Host; if (-not $c) { $c = $dSS }
     $SmartSuggestions = $c -ne "n" -and $c -ne "N"
+
+    $dA = if ($cfg.AutoCheckUpdates) { "Y" } else { "n" }
+    Write-Host "  Auto-update check? [Y/n, Enter=$dA]: " -NoNewline
+    $c = Read-Host; if (-not $c) { $c = $dA }
+    $AutoUpdate = $c -ne "n" -and $c -ne "N"
     Write-Host ""
 } else {
+    $AnimationEnabled = $cfg.AnimationEnabled
     $Theme = $cfg.Theme
     $MatrixMode = $cfg.MatrixMode
     $ShowFullPath = $cfg.ShowFullPath
-    $ShowSystemInfo = $cfg.ShowSystemInfo
     $GradientText = $cfg.GradientText
+    $AIBypass = $cfg.AIBypass
+    $AllowVSCodeAnimations = $cfg.AllowVSCodeAnimations
+    $ShowSystemInfo = $cfg.ShowSystemInfo
+    $ShowUsageBars = $cfg.ShowUsageBars
     $AutoUpdate = $cfg.AutoCheckUpdates
     $SmartSuggestions = $cfg.SmartSuggestions
-    Write-Host "  $Green$b_plus Running in non-interactive/CI mode with default configuration$R"
+    $pStr = if ($ShowFullPath) { "Full" } else { "Folder" }
+    Write-Host "  $Green$b_plus Express mode active:$White Using configuration ($Theme | $MatrixMode | $pStr)$R"
     Write-Host ""
 }
 
@@ -339,7 +399,7 @@ if (Test-Path "$InstallPath") {
     # Config
     Write-Host "  $Cyan$b_44 $White Saving Config...$R"
     $config = [ordered]@{
-        AnimationEnabled      = $true
+        AnimationEnabled      = $AnimationEnabled
         MatrixDuration        = 2
         MatrixMode            = $MatrixMode
         SecurityLoadSteps     = 8
@@ -354,10 +414,10 @@ if (Test-Path "$InstallPath") {
         UpdateCheckDays       = 1
         StealthMode           = $cfg.StealthMode
         StealthMaskPath       = $cfg.StealthMaskPath
-        AIBypass              = $cfg.AIBypass
-        AllowVSCodeAnimations = $cfg.AllowVSCodeAnimations
+        AIBypass              = $AIBypass
+        AllowVSCodeAnimations = $AllowVSCodeAnimations
         LiveStats             = $cfg.LiveStats
-        ShowUsageBars         = $cfg.ShowUsageBars
+        ShowUsageBars         = $ShowUsageBars
     }
     $config | ConvertTo-Json -Depth 3 | Out-File $ConfigFile -Encoding UTF8 -Force
     Write-Host "  $Green$b_plus Config saved to $ConfigFile$R"

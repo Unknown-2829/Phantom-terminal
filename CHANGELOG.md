@@ -5,6 +5,30 @@ All notable changes to Phantom Terminal will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.3 "Krypton"] - 2026-10-18
+
+### Fixed
+- **AI Agent Guard & VS Code Animation Isolation**:
+  - Resolved animation suppression in VS Code by recognizing all modern environment markers (`VSCODE_PID`, `VSCODE_IPC_HOOK_CLI`, `VSCODE_NONCE`, `VSCODE_CWD`, `VSCODE_SHELL_INTEGRATION`).
+  - Implemented PID and TTY session isolation to eliminate inheritance poisoning when VS Code is opened via `code .`, ensuring new tabs animate while child subshells remain silent.
+  - Removed the `$- == *i*` trap in login shells (`bash -l`) that previously silenced interactive users.
+- **BSD Platform Support & Hardware Telemetry**:
+  - Implemented explicit BSD detection (`FreeBSD`, `OpenBSD`, `NetBSD`, `DragonFly BSD`) in `detect_platform()`, telemetry sampling (`top`, `sysctl -n hw.physmem`, `kern.boottime`), and installer banners.
+  - Fixed documentation mismatch regarding BSD compatibility.
+- **Multi-Tier JSON Fallback Validation**:
+  - Replaced structural outer-brace checks with a robust multi-tier JSON validator supporting `jq`, `python3`, `node`, `perl`, and a POSIX AWK structural fallback validator, preventing malformed JSON from passing undetected.
+- **Installer Configuration Recovery**:
+  - Both `install.ps1` and `install.sh` now safely backup malformed configurations to `.corrupt.<timestamp>` before saving, preventing accidental preference loss.
+- **Stale Version Comment Headers**:
+  - Aligned all script comment headers across PowerShell and Bash engines to strictly match runtime version `v4.2.3`.
+
+### Added
+- **Interactive Setup Wizard for Linux, macOS, Termux & BSD (`install.sh`)**:
+  - Brought full feature parity to the Unix installer, offering a rich, guided step-by-step interactive configuration wizard (Theme selection, Matrix Rain style, Prompt Path style, Dashboard system info, CPU & RAM usage bars, Startup animations, AI Agent Guard bypass, VS Code animations, and Auto-update checks).
+- **Dual Installer Architecture Across All Platforms**:
+  - Introduced unified mode selection on both `install.ps1` and `install.sh`: `[1] Express Install (Recommended)` for immediate one-click setup using smart defaults or preserving existing configurations, and `[2] Custom / Interactive Setup` for full control over features.
+  - Automatic non-blocking fallback to Express Install when executing in piped streams (`curl | bash`, `irm | iex`), CI runners (`CI=true`), or non-interactive subshells (`! -t 0`).
+
 ## [4.2.2 "Krypton"] - 2026-10-18
 
 ### Fixed
@@ -516,6 +540,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[4.2.3]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v4.2.3
+[4.2.2]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v4.2.2
 [4.2.1]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v4.2.1
 [4.1.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v4.1.0
 [4.0.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v4.0.0

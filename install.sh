@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Phantom Terminal - Universal Native Installer v4.2.2
+# Phantom Terminal - Universal Native Installer v4.2.3
 # Cross-platform installer with automatic platform detection and ZERO external dependencies.
 # Supports: Linux, macOS, Termux (Android), BSD
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.sh | bash
-#   wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.2/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.3/install.sh | bash
+#   wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.3/install.sh | bash
 #
 
 set -u
@@ -55,15 +55,29 @@ R="${E}[0m"
 # ═══════════════════════════════════════════════════════════════════════════
 
 detect_platform() {
-    if [[ "$OSTYPE" == "linux-android"* ]] || [[ -n "${TERMUX_VERSION:-}" ]]; then
-        echo "termux"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "macos"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        echo "linux"
-    else
-        echo "unknown"
-    fi
+    local u
+    u="$(uname -s 2>/dev/null || echo "${OSTYPE:-}")"
+    case "$u" in
+        Darwin*|darwin*)
+            echo "macos"
+            ;;
+        *Android*|*linux-android*|*android*)
+            echo "termux"
+            ;;
+        FreeBSD*|OpenBSD*|NetBSD*|DragonFly*|*BSD*|*bsd*)
+            echo "bsd"
+            ;;
+        Linux*|linux*)
+            if [[ -n "${TERMUX_VERSION:-}" ]] || [[ "${PREFIX:-}" == *"com.termux"* ]]; then
+                echo "termux"
+            else
+                echo "linux"
+            fi
+            ;;
+        *)
+            echo "linux"
+            ;;
+    esac
 }
 
 PLATFORM=$(detect_platform)
@@ -72,13 +86,13 @@ PLATFORM=$(detect_platform)
 # VARIABLES & PATHS
 # ═══════════════════════════════════════════════════════════════════════════
 
-INSTALL_VERSION="4.2.2"
+INSTALL_VERSION="4.2.3"
 INSTALL_CODENAME="Krypton"
 RELEASE_TAG="v$INSTALL_VERSION"
 REPO_URL="https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/$RELEASE_TAG"
 ASSET_URL="https://github.com/Unknown-2829/Phantom-terminal/releases/download/$RELEASE_TAG"
 [[ "$REPO_URL" != *"github"* ]] && ASSET_URL="$REPO_URL"
-EXPECTED_SHA256="7ad0783fde39ebaf380762b30afa25b43c607aa11e6f19685baf324d55d3d3ba"
+EXPECTED_SHA256="0149cc818a288dc7ca045cf872962377436b860c36f6181b499d21738b1cb39a"
 TARGET_HOME="${PHANTOM_HOME:-${UNKNOWN_HOME:-$HOME}}"
 CONFIG_DIR="$TARGET_HOME/.phantom-terminal"
 CONFIG_FILE="$CONFIG_DIR/config.json"
@@ -240,6 +254,7 @@ echo ""
 case "$PLATFORM" in
     termux) echo "  ${GREEN}[+]${WHITE} Platform: Termux (Android)${R}" ;;
     macos)  echo "  ${GREEN}[+]${WHITE} Platform: macOS${R}" ;;
+    bsd)    echo "  ${GREEN}[+]${WHITE} Platform: BSD ($(uname -s 2>/dev/null))${R}" ;;
     linux)  echo "  ${GREEN}[+]${WHITE} Platform: Linux${R}" ;;
     *)      echo "  ${GOLD}[!]${WHITE} Platform: POSIX Generic${R}" ;;
 esac
@@ -247,30 +262,104 @@ esac
 echo "  ${GREEN}[+]${WHITE} Shell: $SHELL_TYPE${R}"
 echo "  ${GREEN}[+]${WHITE} Profile: $PROFILE${R}"
 
+if [[ -f "$INSTALL_PATH" || -f "$LEGACY_PATH" ]]; then
+    echo "  ${GOLD}[*]${GRAY} Detected existing installation (preserving active setup until verified)...${R}"
+fi
+
 if [[ ! -w "$HOME" ]]; then
     handle_error "Cannot write to home directory: $HOME"
     exit 1
 fi
-
 echo ""
 
-# Interactive confirmation
-if [[ -t 0 ]]; then
-    read -r -p "  ${GOLD}Continue installation? [Y/n]:${R} " confirm
-    confirm=${confirm:-Y}
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "  ${RED}Installation cancelled.${R}"
-        exit 0
+# ═══════════════════════════════════════════════════════════════════════════
+# CONFIGURATION & JSON VALIDATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+_validate_json_file() {
+    local target="$1"
+    [[ ! -f "$target" ]] && return 1
+    [[ ! -s "$target" ]] && return 1
+
+    # Tier 1: Real JSON engines if available
+    if command -v jq &>/dev/null; then
+        jq empty "$target" 2>/dev/null && return 0 || return 1
     fi
-else
-    echo "  ${GOLD}Non-interactive session detected (proceeding)${R}"
-fi
-echo ""
+    if command -v python3 &>/dev/null; then
+        python3 -c "import json, sys; json.load(open(sys.argv[1]))" "$target" 2>/dev/null && return 0 || return 1
+    fi
+    if command -v python &>/dev/null; then
+        python -c "import json, sys; json.load(open(sys.argv[1]))" "$target" 2>/dev/null && return 0 || return 1
+    fi
+    if command -v node &>/dev/null; then
+        node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$target" 2>/dev/null && return 0 || return 1
+    fi
+    if command -v perl &>/dev/null; then
+        perl -MJSON::PP -e "JSON::PP::decode_json(do { local \$/; <> })" "$target" 2>/dev/null && return 0 || return 1
+    fi
+
+    # Tier 2: POSIX structural JSON validator using awk
+    awk '
+    BEGIN {
+        brace_count = 0;
+        bracket_count = 0;
+        in_string = 0;
+        escape = 0;
+        first_char = "";
+        last_char = "";
+        valid = 1;
+    }
+    {
+        line = $0;
+        len = length(line);
+        for (i = 1; i <= len; i++) {
+            c = substr(line, i, 1);
+            if (first_char == "" && c ~ /[^ \t\r\n]/) {
+                first_char = c;
+            }
+            if (c ~ /[^ \t\r\n]/) {
+                last_char = c;
+            }
+            if (in_string) {
+                if (escape) {
+                    escape = 0;
+                } else if (c == "\\") {
+                    escape = 1;
+                } else if (c == "\"") {
+                    in_string = 0;
+                }
+            } else {
+                if (c == "\"") {
+                    in_string = 1;
+                } else if (c == "{") {
+                    brace_count++;
+                } else if (c == "}") {
+                    brace_count--;
+                    if (brace_count < 0) { valid = 0; exit; }
+                } else if (c == "[") {
+                    bracket_count++;
+                } else if (c == "]") {
+                    bracket_count--;
+                    if (bracket_count < 0) { valid = 0; exit; }
+                }
+            }
+        }
+    }
+    END {
+        if (!valid || in_string || brace_count != 0 || bracket_count != 0 || first_char != "{" || last_char != "}") {
+            exit 1;
+        }
+        exit 0;
+    }
+    ' "$target" 2>/dev/null
+    return $?
+}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONFIG LOAD & PRESERVATION
 # ═══════════════════════════════════════════════════════════════════════════
 
+ANIMATION_ENABLED=true
 THEME="Phantom"
 MATRIX_MODE="Letters"
 SHOW_FULL_PATH=true
@@ -296,163 +385,207 @@ to_bool() {
 }
 
 if [[ -f "$CONFIG_FILE" ]]; then
-    echo "  ${GOLD}[*]${GRAY} Preserving existing configuration...${R}"
-    if command -v jq &> /dev/null; then
-        THEME=$(jq -r '.Theme // "Phantom"' "$CONFIG_FILE" 2>/dev/null || echo "Phantom")
-        MATRIX_MODE=$(jq -r '.MatrixMode // "Letters"' "$CONFIG_FILE" 2>/dev/null || echo "Letters")
-        SHOW_FULL_PATH=$(to_bool "$(jq -r '.ShowFullPath // true' "$CONFIG_FILE" 2>/dev/null)")
-        GRADIENT_TEXT=$(to_bool "$(jq -r '.GradientText // true' "$CONFIG_FILE" 2>/dev/null)")
-        AUTO_UPDATE=$(to_bool "$(jq -r '.AutoCheckUpdates // true' "$CONFIG_FILE" 2>/dev/null)")
-        SHOW_SYSTEM_INFO=$(to_bool "$(jq -r '.ShowSystemInfo // true' "$CONFIG_FILE" 2>/dev/null)")
-        SMART_SUGGESTIONS=$(to_bool "$(jq -r '.SmartSuggestions // true' "$CONFIG_FILE" 2>/dev/null)")
-        STEALTH_MODE=$(to_bool "$(jq -r '.StealthMode // false' "$CONFIG_FILE" 2>/dev/null)")
-        STEALTH_MASK_PATH=$(to_bool "$(jq -r '.StealthMaskPath // false' "$CONFIG_FILE" 2>/dev/null)")
-        AI_BYPASS=$(to_bool "$(jq -r '.AIBypass // true' "$CONFIG_FILE" 2>/dev/null)")
-        ALLOW_VSCODE_ANIMATIONS=$(to_bool "$(jq -r '.AllowVSCodeAnimations // true' "$CONFIG_FILE" 2>/dev/null)")
-        LIVE_STATS=$(to_bool "$(jq -r '.LiveStats // false' "$CONFIG_FILE" 2>/dev/null)")
-        SHOW_USAGE_BARS=$(to_bool "$(jq -r '.ShowUsageBars // true' "$CONFIG_FILE" 2>/dev/null)")
+    if ! _validate_json_file "$CONFIG_FILE"; then
+        ts=$(date +%Y%m%d%H%M%S 2>/dev/null || echo "$$")
+        corrupt_backup="${CONFIG_FILE}.corrupt.$ts"
+        cp -f "$CONFIG_FILE" "$corrupt_backup" 2>/dev/null || true
+        echo "  ${RED}[!] Warning: Malformed configuration detected. Backed up to ${corrupt_backup}. Loading defaults.${R}"
+        echo ""
     else
-        # Pure Bash regex parser - zero dependencies!
-        parse_cfg() {
-            local key="$1"
-            local default="$2"
-            local line
-            line=$(grep -E "\"$key\"[[:space:]]*:" "$CONFIG_FILE" 2>/dev/null | head -1)
-            if [[ -n "$line" ]]; then
-                local val
-                val=$(echo "$line" | sed -E 's/.*:[[:space:]]*"?([^",]*)"?.*/\1/' | tr -d ' \r\t')
-                echo "$val"
-            else
-                echo "$default"
-            fi
-        }
-        THEME=$(parse_cfg "Theme" "Phantom")
-        MATRIX_MODE=$(parse_cfg "MatrixMode" "Letters")
-        SHOW_FULL_PATH=$(to_bool "$(parse_cfg "ShowFullPath" "true")")
-        GRADIENT_TEXT=$(to_bool "$(parse_cfg "GradientText" "true")")
-        AUTO_UPDATE=$(to_bool "$(parse_cfg "AutoCheckUpdates" "true")")
-        SHOW_SYSTEM_INFO=$(to_bool "$(parse_cfg "ShowSystemInfo" "true")")
-        SMART_SUGGESTIONS=$(to_bool "$(parse_cfg "SmartSuggestions" "true")")
-        STEALTH_MODE=$(to_bool "$(parse_cfg "StealthMode" "false")")
-        STEALTH_MASK_PATH=$(to_bool "$(parse_cfg "StealthMaskPath" "false")")
-        AI_BYPASS=$(to_bool "$(parse_cfg "AIBypass" "true")")
-        ALLOW_VSCODE_ANIMATIONS=$(to_bool "$(parse_cfg "AllowVSCodeAnimations" "true")")
-        LIVE_STATS=$(to_bool "$(parse_cfg "LiveStats" "false")")
-        SHOW_USAGE_BARS=$(to_bool "$(parse_cfg "ShowUsageBars" "true")")
-    fi
+        echo "  ${GOLD}[*]${GRAY} Preserving existing configuration...${R}"
+        if command -v jq &> /dev/null; then
+            ANIMATION_ENABLED=$(to_bool "$(jq -r '.AnimationEnabled // true' "$CONFIG_FILE" 2>/dev/null)")
+            THEME=$(jq -r '.Theme // "Phantom"' "$CONFIG_FILE" 2>/dev/null || echo "Phantom")
+            MATRIX_MODE=$(jq -r '.MatrixMode // "Letters"' "$CONFIG_FILE" 2>/dev/null || echo "Letters")
+            SHOW_FULL_PATH=$(to_bool "$(jq -r '.ShowFullPath // true' "$CONFIG_FILE" 2>/dev/null)")
+            GRADIENT_TEXT=$(to_bool "$(jq -r '.GradientText // true' "$CONFIG_FILE" 2>/dev/null)")
+            AUTO_UPDATE=$(to_bool "$(jq -r '.AutoCheckUpdates // true' "$CONFIG_FILE" 2>/dev/null)")
+            SHOW_SYSTEM_INFO=$(to_bool "$(jq -r '.ShowSystemInfo // true' "$CONFIG_FILE" 2>/dev/null)")
+            SMART_SUGGESTIONS=$(to_bool "$(jq -r '.SmartSuggestions // true' "$CONFIG_FILE" 2>/dev/null)")
+            STEALTH_MODE=$(to_bool "$(jq -r '.StealthMode // false' "$CONFIG_FILE" 2>/dev/null)")
+            STEALTH_MASK_PATH=$(to_bool "$(jq -r '.StealthMaskPath // false' "$CONFIG_FILE" 2>/dev/null)")
+            AI_BYPASS=$(to_bool "$(jq -r '.AIBypass // true' "$CONFIG_FILE" 2>/dev/null)")
+            ALLOW_VSCODE_ANIMATIONS=$(to_bool "$(jq -r '.AllowVSCodeAnimations // true' "$CONFIG_FILE" 2>/dev/null)")
+            LIVE_STATS=$(to_bool "$(jq -r '.LiveStats // false' "$CONFIG_FILE" 2>/dev/null)")
+            SHOW_USAGE_BARS=$(to_bool "$(jq -r '.ShowUsageBars // true' "$CONFIG_FILE" 2>/dev/null)")
+        else
+            # Pure Bash regex parser - zero dependencies!
+            parse_cfg() {
+                local key="$1"
+                local default="$2"
+                local line
+                line=$(grep -E "\"$key\"[[:space:]]*:" "$CONFIG_FILE" 2>/dev/null | head -1)
+                if [[ -n "$line" ]]; then
+                    local val
+                    val=$(echo "$line" | sed -E 's/.*:[[:space:]]*"?([^",]*)"?.*/\1/' | tr -d ' \r\t')
+                    echo "$val"
+                else
+                    echo "$default"
+                fi
+            }
+            ANIMATION_ENABLED=$(to_bool "$(parse_cfg "AnimationEnabled" "true")")
+            THEME=$(parse_cfg "Theme" "Phantom")
+            MATRIX_MODE=$(parse_cfg "MatrixMode" "Letters")
+            SHOW_FULL_PATH=$(to_bool "$(parse_cfg "ShowFullPath" "true")")
+            GRADIENT_TEXT=$(to_bool "$(parse_cfg "GradientText" "true")")
+            AUTO_UPDATE=$(to_bool "$(parse_cfg "AutoCheckUpdates" "true")")
+            SHOW_SYSTEM_INFO=$(to_bool "$(parse_cfg "ShowSystemInfo" "true")")
+            SMART_SUGGESTIONS=$(to_bool "$(parse_cfg "SmartSuggestions" "true")")
+            STEALTH_MODE=$(to_bool "$(parse_cfg "StealthMode" "false")")
+            STEALTH_MASK_PATH=$(to_bool "$(parse_cfg "StealthMaskPath" "false")")
+            AI_BYPASS=$(to_bool "$(parse_cfg "AIBypass" "true")")
+            ALLOW_VSCODE_ANIMATIONS=$(to_bool "$(parse_cfg "AllowVSCodeAnimations" "true")")
+            LIVE_STATS=$(to_bool "$(parse_cfg "LiveStats" "false")")
+            SHOW_USAGE_BARS=$(to_bool "$(parse_cfg "ShowUsageBars" "true")")
+        fi
 
-    echo "  ${GREEN}[+]${WHITE} Settings preserved${R}"
-    echo ""
+        echo "  ${GREEN}[+]${WHITE} Settings preserved${R}"
+        echo ""
+    fi
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════
-# INSTALLATION WIZARD
+# INSTALLATION WIZARD & MODE SELECTION
 # ═══════════════════════════════════════════════════════════════════════════
 
 NON_INTERACTIVE=false
-if [[ ! -t 0 ]]; then
+if [[ ! -t 0 || -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
     NON_INTERACTIVE=true
-    echo "  ${GOLD}[i] Non-interactive mode: using defaults / existing settings${R}"
+fi
+
+INSTALL_MODE="1"
+if [[ "$NON_INTERACTIVE" == "false" ]]; then
+    echo "  ${GOLD}[?] CHOOSE INSTALLATION MODE:${R}"
+    echo "  ${CYAN}[1] Express Install (Recommended)${R}  ${GRAY}- Instant setup with defaults / preserved settings${R}"
+    echo "  ${PURPLE}[2] Custom / Interactive Setup${R}    ${GRAY}- Step-by-step configuration wizard${R}"
+    echo ""
+    read -r -p "  Choice [Enter=1]: " mode_choice
+    mode_choice=${mode_choice:-1}
+    [[ "$mode_choice" == "2" ]] && INSTALL_MODE="2" || INSTALL_MODE="1"
+    echo ""
+else
+    echo "  ${GREEN}[+] Running in non-interactive/Express mode with default configuration${R}"
     echo ""
 fi
 
-if [[ "$SHELL_TYPE" == "sh" ]]; then
-    if [[ "${SHELL:-}" == *"zsh"* ]]; then
-        SHELL_TYPE="zsh"
-        PROFILE="$HOME/.zshrc"
-    elif [[ "${SHELL:-}" == *"bash"* ]]; then
-        SHELL_TYPE="bash"
-        if [[ "$PLATFORM" == "macos" ]]; then
-            [[ -f "$HOME/.bash_profile" ]] && PROFILE="$HOME/.bash_profile" || PROFILE="$HOME/.bashrc"
-        else
-            PROFILE="$HOME/.bashrc"
+if [[ "$INSTALL_MODE" == "2" ]]; then
+    echo "  ${GOLD}─── CUSTOM CONFIGURATION WIZARD ───${R}"
+    echo ""
+
+    # Step 1: Shell Profile
+    if [[ "$SHELL_TYPE" == "sh" ]]; then
+        if [[ "${SHELL:-}" == *"zsh"* ]]; then
+            SHELL_TYPE="zsh"
+            PROFILE="$HOME/.zshrc"
+        elif [[ "${SHELL:-}" == *"bash"* ]]; then
+            SHELL_TYPE="bash"
+            if [[ "$PLATFORM" == "macos" ]]; then
+                [[ -f "$HOME/.bash_profile" ]] && PROFILE="$HOME/.bash_profile" || PROFILE="$HOME/.bashrc"
+            else
+                PROFILE="$HOME/.bashrc"
+            fi
         fi
     fi
-fi
+    choose_shell_profile
+    echo "  ${GREEN}[+]${WHITE} Shell: $SHELL_TYPE${R}"
+    echo "  ${GREEN}[+]${WHITE} Profile: $PROFILE${R}"
+    echo ""
 
-choose_shell_profile
-echo "  ${GREEN}[+]${WHITE} Shell: $SHELL_TYPE${R}"
-echo "  ${GREEN}[+]${WHITE} Profile: $PROFILE${R}"
-echo ""
-
-# Theme selection
-echo "  ${GOLD}[1] THEME${R}"
-d1="1"
-[[ "$THEME" == "Unknown" ]] && d1="2"
-echo "  ${PURPLE}[1] Phantom${R}  ${GREEN}[2] Unknown${R}  ${DGRAY}(current: $THEME)${R}"
-if [[ "$NON_INTERACTIVE" == "false" ]]; then
+    # Step 2: Theme
+    echo "  ${GOLD}[1] THEME${R}"
+    d1="1"
+    [[ "$THEME" == "Unknown" ]] && d1="2"
+    echo "  ${PURPLE}[1] Phantom${R}  ${GREEN}[2] Unknown${R}  ${DGRAY}(current: $THEME)${R}"
     read -r -p "  Choice [Enter=$d1]: " choice
     choice=${choice:-$d1}
-else
-    choice=$d1
-fi
-[[ "$choice" == "2" ]] && THEME="Unknown" || THEME="Phantom"
-echo "  ${GREEN}→ $THEME${R}"
-echo ""
+    [[ "$choice" == "2" ]] && THEME="Unknown" || THEME="Phantom"
+    echo "  ${GREEN}→ $THEME${R}"
+    echo ""
 
-# Matrix Mode
-echo "  ${GOLD}[2] MATRIX RAIN${R}"
-d2="1"
-[[ "$MATRIX_MODE" == "Binary" ]] && d2="2"
-echo "  ${CYAN}[1] Letters${R}  ${GREEN}[2] Binary${R}  ${DGRAY}(current: $MATRIX_MODE)${R}"
-if [[ "$NON_INTERACTIVE" == "false" ]]; then
+    # Step 3: Matrix Mode
+    echo "  ${GOLD}[2] MATRIX RAIN${R}"
+    d2="1"
+    [[ "$MATRIX_MODE" == "Binary" ]] && d2="2"
+    echo "  ${CYAN}[1] Letters${R}  ${GREEN}[2] Binary${R}  ${DGRAY}(current: $MATRIX_MODE)${R}"
     read -r -p "  Choice [Enter=$d2]: " choice
     choice=${choice:-$d2}
-else
-    choice=$d2
-fi
-[[ "$choice" == "2" ]] && MATRIX_MODE="Binary" || MATRIX_MODE="Letters"
-echo "  ${GREEN}→ $MATRIX_MODE${R}"
-echo ""
+    [[ "$choice" == "2" ]] && MATRIX_MODE="Binary" || MATRIX_MODE="Letters"
+    echo "  ${GREEN}→ $MATRIX_MODE${R}"
+    echo ""
 
-# Prompt Path
-echo "  ${GOLD}[3] PROMPT PATH${R}"
-d3="1"
-[[ "$SHOW_FULL_PATH" == "false" ]] && d3="2"
-echo "  ${CYAN}[1] Full path${R}  ${BLUE}[2] Folder only${R}  ${DGRAY}(current: $([ "$SHOW_FULL_PATH" == "true" ] && echo "Full" || echo "Folder"))${R}"
-if [[ "$NON_INTERACTIVE" == "false" ]]; then
+    # Step 4: Prompt Path
+    echo "  ${GOLD}[3] PROMPT PATH${R}"
+    d3="1"
+    [[ "$SHOW_FULL_PATH" == "false" ]] && d3="2"
+    echo "  ${CYAN}[1] Full path${R}  ${BLUE}[2] Folder only${R}  ${DGRAY}(current: $([ "$SHOW_FULL_PATH" == "true" ] && echo "Full" || echo "Folder"))${R}"
     read -r -p "  Choice [Enter=$d3]: " choice
     choice=${choice:-$d3}
-else
-    choice=$d3
-fi
-[[ "$choice" == "2" ]] && SHOW_FULL_PATH=false || SHOW_FULL_PATH=true
-echo "  ${GREEN}→ $([ "$SHOW_FULL_PATH" == "true" ] && echo "Full path" || echo "Folder only")${R}"
-echo ""
+    [[ "$choice" == "2" ]] && SHOW_FULL_PATH=false || SHOW_FULL_PATH=true
+    echo "  ${GREEN}→ $([ "$SHOW_FULL_PATH" == "true" ] && echo "Full path" || echo "Folder only")${R}"
+    echo ""
 
-# Options
-echo "  ${GOLD}[4] OPTIONS${R}"
+    # Step 5: Animations & Visuals
+    echo "  ${GOLD}[4] ANIMATIONS & VISUALS${R}"
+    dAni="Y"
+    [[ "$ANIMATION_ENABLED" == "false" ]] && dAni="n"
+    read -r -p "  Enable startup animations? [Y/n, Enter=$dAni]: " choice
+    choice=${choice:-$dAni}
+    [[ "$choice" =~ ^[Nn]$ ]] && ANIMATION_ENABLED=false || ANIMATION_ENABLED=true
 
-dS="Y"
-[[ "$SHOW_SYSTEM_INFO" == "false" ]] && dS="n"
-if [[ "$NON_INTERACTIVE" == "false" ]]; then
-    read -r -p "  Show system info? [Y/n, Enter=$dS]: " choice
-    choice=${choice:-$dS}
-else
-    choice=$dS
-fi
-[[ "$choice" =~ ^[Nn]$ ]] && SHOW_SYSTEM_INFO=false || SHOW_SYSTEM_INFO=true
-
-dG="Y"
-[[ "$GRADIENT_TEXT" == "false" ]] && dG="n"
-if [[ "$NON_INTERACTIVE" == "false" ]]; then
-    read -r -p "  Gradient logo? [Y/n, Enter=$dG]: " choice
+    dG="Y"
+    [[ "$GRADIENT_TEXT" == "false" ]] && dG="n"
+    read -r -p "  Gradient logo colors? [Y/n, Enter=$dG]: " choice
     choice=${choice:-$dG}
-else
-    choice=$dG
-fi
-[[ "$choice" =~ ^[Nn]$ ]] && GRADIENT_TEXT=false || GRADIENT_TEXT=true
+    [[ "$choice" =~ ^[Nn]$ ]] && GRADIENT_TEXT=false || GRADIENT_TEXT=true
+    echo ""
 
-dA="Y"
-[[ "$AUTO_UPDATE" == "false" ]] && dA="n"
-if [[ "$NON_INTERACTIVE" == "false" ]]; then
-    read -r -p "  Auto-update check? [Y/n, Enter=$dA]: " choice
+    # Step 6: AI Guard & Developer Settings
+    echo "  ${GOLD}[5] AI GUARD & DEVELOPER SETTINGS${R}"
+    dAI="Y"
+    [[ "$AI_BYPASS" == "false" ]] && dAI="n"
+    read -r -p "  Auto-bypass in AI coding agents / CI? [Y/n, Enter=$dAI]: " choice
+    choice=${choice:-$dAI}
+    [[ "$choice" =~ ^[Nn]$ ]] && AI_BYPASS=false || AI_BYPASS=true
+
+    dVSC="Y"
+    [[ "$ALLOW_VSCODE_ANIMATIONS" == "false" ]] && dVSC="n"
+    read -r -p "  Allow animations in VS Code terminal? [Y/n, Enter=$dVSC]: " choice
+    choice=${choice:-$dVSC}
+    [[ "$choice" =~ ^[Nn]$ ]] && ALLOW_VSCODE_ANIMATIONS=false || ALLOW_VSCODE_ANIMATIONS=true
+    echo ""
+
+    # Step 7: Telemetry & Extras
+    echo "  ${GOLD}[6] TELEMETRY & FEATURES${R}"
+    dS="Y"
+    [[ "$SHOW_SYSTEM_INFO" == "false" ]] && dS="n"
+    read -r -p "  Show system info on dashboard? [Y/n, Enter=$dS]: " choice
+    choice=${choice:-$dS}
+    [[ "$choice" =~ ^[Nn]$ ]] && SHOW_SYSTEM_INFO=false || SHOW_SYSTEM_INFO=true
+
+    dUB="Y"
+    [[ "$SHOW_USAGE_BARS" == "false" ]] && dUB="n"
+    read -r -p "  Show real-time CPU & RAM usage bars? [Y/n, Enter=$dUB]: " choice
+    choice=${choice:-$dUB}
+    [[ "$choice" =~ ^[Nn]$ ]] && SHOW_USAGE_BARS=false || SHOW_USAGE_BARS=true
+
+    dSS="Y"
+    [[ "$SMART_SUGGESTIONS" == "false" ]] && dSS="n"
+    read -r -p "  Predictive smart suggestions? [Y/n, Enter=$dSS]: " choice
+    choice=${choice:-$dSS}
+    [[ "$choice" =~ ^[Nn]$ ]] && SMART_SUGGESTIONS=false || SMART_SUGGESTIONS=true
+
+    dA="Y"
+    [[ "$AUTO_UPDATE" == "false" ]] && dA="n"
+    read -r -p "  Auto-check for updates? [Y/n, Enter=$dA]: " choice
     choice=${choice:-$dA}
+    [[ "$choice" =~ ^[Nn]$ ]] && AUTO_UPDATE=false || AUTO_UPDATE=true
+    echo ""
 else
-    choice=$dA
+    p_str="Full"
+    [[ "$SHOW_FULL_PATH" == "false" ]] && p_str="Folder"
+    echo "  ${GREEN}[+] Express mode active:${WHITE} Using configuration ($THEME | $MATRIX_MODE | $p_str)${R}"
+    echo ""
 fi
-[[ "$choice" =~ ^[Nn]$ ]] && AUTO_UPDATE=false || AUTO_UPDATE=true
-
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -611,7 +744,7 @@ echo "  ${GREEN}[+] Profile updated safely${R}"
 echo "  ${CYAN}[4/4]${WHITE} Saving config...${R}"
 cat > "$CONFIG_FILE" <<EOF
 {
-  "AnimationEnabled": true,
+  "AnimationEnabled": $ANIMATION_ENABLED,
   "MatrixDuration": 2,
   "MatrixMode": "$MATRIX_MODE",
   "SecurityLoadSteps": 8,
@@ -684,6 +817,9 @@ case "$PLATFORM" in
         ;;
     macos)
         echo "  ${CYAN}[macOS] Compatible with Terminal.app, iTerm2, Kitty, and Ghostty${R}"
+        ;;
+    bsd)
+        echo "  ${CYAN}[BSD] Compatible with FreeBSD, OpenBSD, NetBSD, and DragonFly BSD${R}"
         ;;
     linux)
         echo "  ${CYAN}[Linux] Works across all POSIX shells and terminal emulators${R}"

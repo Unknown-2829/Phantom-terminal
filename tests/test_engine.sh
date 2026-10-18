@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phantom Terminal v4.2.2 - Rigorous Bash Engine Test Suite
+# Phantom Terminal v4.2.3 - Rigorous Bash Engine Test Suite
 set -u
 
 PASS_COUNT=0
@@ -19,7 +19,7 @@ assert_test() {
 }
 
 echo ""
-echo "=== Testing Phantom Terminal Bash v4.2.2 Engine ==="
+echo "=== Testing Phantom Terminal Bash v4.2.3 Engine ==="
 echo ""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")/.." && pwd)"
@@ -268,7 +268,7 @@ cp "$SCRIPT_DIR/PhantomStartup.sh" "$SANDBOX_DIR/repo/PhantomStartup.sh"
 exit_valid=$?
 
 promoted_valid=false
-if grep -q 'SCRIPT_VERSION="4.2.2"' "$ACTIVE_ENGINE" 2>/dev/null; then
+if grep -q 'SCRIPT_VERSION="4.2.3"' "$ACTIVE_ENGINE" 2>/dev/null; then
     promoted_valid=true
 fi
 profile_configured=false
@@ -291,13 +291,34 @@ sed -i.bak 's|^REPO_URL=.*|REPO_URL="http://127.0.0.1:9"|' "$SANDBOX_DIR/repo_re
 exit_remote_fail=$?
 
 remote_preserved=false
-if grep -q 'SCRIPT_VERSION="4.2.2"' "$ACTIVE_ENGINE" 2>/dev/null; then
+if grep -q 'SCRIPT_VERSION="4.2.3"' "$ACTIVE_ENGINE" 2>/dev/null; then
     remote_preserved=true
 fi
 
 [[ $exit_remote_fail -ne 0 && "$remote_preserved" == "true" ]] && \
     assert_test "Installer Integrity: Real installer fails closed on remote manifest/network failure" "true" || \
     assert_test "Installer Integrity" "false" "remote failure did not abort safely"
+
+# Integration Scenario D: Configuration recovery preserves malformed existing settings before rewriting
+corrupt_cfg="$SANDBOX_DIR/home/.phantom-terminal/config.json"
+echo '{ "Theme": "Unknown", INVALID_JSON_GAP ' > "$corrupt_cfg"
+
+(HOME="$SANDBOX_DIR/home" CI=true bash "$SANDBOX_DIR/repo/install.sh" &>/dev/null)
+exit_recovery=$?
+
+corrupt_backup_exists=false
+if ls "$SANDBOX_DIR/home/.phantom-terminal/"config.json.corrupt.* &>/dev/null; then
+    corrupt_backup_exists=true
+fi
+
+new_cfg_valid=false
+if grep -q '"Theme":' "$corrupt_cfg" 2>/dev/null; then
+    new_cfg_valid=true
+fi
+
+[[ $exit_recovery -eq 0 && "$corrupt_backup_exists" == "true" && "$new_cfg_valid" == "true" ]] && \
+    assert_test "Installer Recovery: Malformed existing config is backed up to .corrupt file before rewrite" "true" || \
+    assert_test "Installer Recovery" "false" "failed to backup corrupt config or complete installation"
 
 # Test 10: Unknown-Terminal Peer Parity and Codename Krypton
 [[ "$SCRIPT_CODENAME" == "Krypton" ]] &&     assert_test "Codename: Script defines Krypton codename" "true" ||     assert_test "Codename: Script defines Krypton codename" "false"

@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Phantom Terminal - Advanced Native PowerShell Startup System v4.2.1
+    Phantom Terminal - Advanced Native PowerShell Startup System v4.2.3
 .DESCRIPTION
     Pure Native Shell cinematic startup, interactive cyber dashboard, live telemetry,
     smart history prediction, cyberpunk privacy spoofing, and AI agent guard.
@@ -8,14 +8,14 @@
 .NOTES
     Creator: @unknownlll2829 (Telegram)
     GitHub:  https://github.com/Unknown-2829/Phantom-terminal
-    Version: 4.2.1
+    Version: 4.2.3
 #>
 
 # ═══════════════════════════════════════════════════════════════════════════
 # VERSION & PATHS
 # ═══════════════════════════════════════════════════════════════════════════
 
-$Script:Version = "4.2.2"
+$Script:Version = "4.2.3"
 $Script:Codename = "Krypton"
 $Script:FullVersion = "v$Script:Version `"$Script:Codename`""
 $Script:RepoOwner = "Unknown-2829"
@@ -46,8 +46,8 @@ function Test-PhantomAgentGuard {
     if ($env:PHANTOM_FORCE -eq "1" -or $env:UNKNOWN_FORCE -eq "1") { return $false }
     if ($env:PHANTOM_QUIET -eq "1" -or $env:UNKNOWN_QUIET -eq "1") { return $true }
 
-    # VS Code Terminal Control (allowed by default)
-    $isVSCode = ($env:TERM_PROGRAM -eq "vscode" -or $env:VSCODE_INJECTION -or $env:VSCODE_GIT_IPC_HANDLE)
+    # VS Code Terminal Control (allowed by default for human interactive sessions)
+    $isVSCode = ($env:TERM_PROGRAM -eq "vscode" -or $env:VSCODE_PID -or $env:VSCODE_IPC_HOOK_CLI -or $env:VSCODE_INJECTION -or $env:VSCODE_NONCE -or $env:VSCODE_CWD -or $env:VSCODE_SHELL_INTEGRATION -or $env:VSCODE_GIT_IPC_HANDLE)
     $allowVSCode = $true
     if ($Script:Config -and $null -ne $Script:Config.AllowVSCodeAnimations) {
         $allowVSCode = [bool]$Script:Config.AllowVSCodeAnimations
@@ -1262,6 +1262,20 @@ function Show-UpdateCelebrationModal {
     Write-Host ""
 }
 
+function Get-PhantomParentProcessId {
+    try {
+        if ($IsWindows -ne $false) {
+            $proc = Get-CimInstance Win32_Process -Filter ("ProcessId = " + $PID) -ErrorAction SilentlyContinue
+            if ($proc -and $proc.ParentProcessId) { return [int]$proc.ParentProcessId }
+        }
+    } catch {}
+    try {
+        $p = (Get-Process -Id $PID -ErrorAction SilentlyContinue).Parent
+        if ($p -and $p.Id) { return [int]$p.Id }
+    } catch {}
+    return $null
+}
+
 function Start-PhantomTerminal {
     param([switch]$Force)
     # If running inside an AI Agent, CI, or quiet mode: instant silent bypass
@@ -1278,13 +1292,33 @@ function Start-PhantomTerminal {
     $cache.UpdateAvailable = $false
     Save-PhantomCache -Cache $cache
 
-    # Nested subshell detection: skip replay inside child subshells
-    if (($env:PHANTOM_SESSION_ACTIVE -or $env:UNKNOWN_SESSION_ACTIVE) -and -not $Force) {
+    # Session state tracking to prevent nested shell loops while allowing new terminals/tabs
+    $isNestedSubshell = $false
+    if (-not $Force) {
+        $sessionPid = if ($env:PHANTOM_SESSION_PID) { $env:PHANTOM_SESSION_PID } else { $env:UNKNOWN_SESSION_PID }
+        if (-not [string]::IsNullOrEmpty($sessionPid)) {
+            if ($sessionPid -eq "$PID") {
+                # Same shell reloaded (e.g. phantom-reload or sourcing profile)
+                $isNestedSubshell = $true
+            } else {
+                $parentPid = Get-PhantomParentProcessId
+                if ($parentPid -and "$parentPid" -eq "$sessionPid") {
+                    # Child subshell executed inside an active Phantom shell
+                    $isNestedSubshell = $true
+                }
+            }
+        }
+    }
+
+    if ($isNestedSubshell) {
         Show-Dashboard
         return
     }
+
     $env:PHANTOM_SESSION_ACTIVE = "1"
     $env:UNKNOWN_SESSION_ACTIVE = "1"
+    $env:PHANTOM_SESSION_PID = "$PID"
+    $env:UNKNOWN_SESSION_PID = "$PID"
 
     if (-not $Script:Config.AnimationEnabled -and -not $Force) { Show-Dashboard; return }
 

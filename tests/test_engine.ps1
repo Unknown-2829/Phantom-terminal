@@ -1,4 +1,4 @@
-# Phantom Terminal v4.2.2 - Rigorous PowerShell Engine Test Suite
+# Phantom Terminal v4.2.3 - Rigorous PowerShell Engine Test Suite
 $ErrorActionPreference = "Stop"
 
 $PassCount = 0
@@ -19,7 +19,7 @@ function Assert-Test {
     }
 }
 
-Write-Host "`n=== Testing Phantom Terminal PowerShell v4.2.2 Engine ===`n" -ForegroundColor Cyan
+Write-Host "`n=== Testing Phantom Terminal PowerShell v4.2.3 Engine ===`n" -ForegroundColor Cyan
 
 # Test 1: Syntax / AST Parsing
 $scripts = @("PhantomStartup.ps1", "install.ps1", "tests\test_engine.ps1")
@@ -242,7 +242,7 @@ try {
     $env:CI = $origCI
 }
 
-$enginePromoted = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.2\.2"'
+$enginePromoted = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.2\.3"'
 $profileConfigured = (Get-Content $fakeProfile -Raw -ErrorAction SilentlyContinue) -match "Phantom Terminal START"
 
 Assert-Test -Name "Installer Integrity: Real installer validates and atomically promotes valid payload" -Condition ($installSuccess -and $enginePromoted -and $profileConfigured)
@@ -270,8 +270,35 @@ try {
     $env:CI = $origCI
 }
 
-$engineIntactAfterRemoteFail = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.2\.2"'
+$engineIntactAfterRemoteFail = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.2\.3"'
 Assert-Test -Name "Installer Integrity: Real installer fails closed on remote manifest/network failure" -Condition ($remoteFailedClosed -and $engineIntactAfterRemoteFail)
+
+# Integration Scenario D: Configuration recovery preserves malformed existing settings before rewriting
+$corruptConfigPath = Join-Path $fakeConfig "config.json"
+Set-Content -Path $corruptConfigPath -Value "{ `"Theme`": `"Unknown`", INVALID_JSON_GAP " -Encoding UTF8
+$configRecoverySuccess = $false
+try {
+    $env:PHANTOM_HOME = $fakeHome
+    $env:PHANTOM_PROFILE = $fakeProfile
+    $env:CI = "true"
+    $LASTEXITCODE = 0
+    & (Join-Path $fakeRepo "install.ps1") >$null 2>&1
+    $configRecoverySuccess = ($LASTEXITCODE -eq 0)
+} catch {
+    $configRecoverySuccess = $false
+} finally {
+    $env:PHANTOM_HOME = $origPhantomHome
+    $env:PHANTOM_PROFILE = $origPhantomProfile
+    $env:CI = $origCI
+}
+$corruptBackupExists = @(Get-ChildItem -Path $fakeConfig -Filter "config.json.corrupt.*" -ErrorAction SilentlyContinue).Count -gt 0
+$newConfigValid = $false
+try {
+    $parsedNew = Get-Content $corruptConfigPath -Raw | ConvertFrom-Json
+    if ($parsedNew -and $parsedNew.Theme) { $newConfigValid = $true }
+} catch {}
+
+Assert-Test -Name "Installer Recovery: Malformed existing config is backed up to .corrupt file before rewrite" -Condition ($configRecoverySuccess -and $corruptBackupExists -and $newConfigValid)
 
 # Test 10: Unknown-Terminal Peer Parity and Codename Krypton
 Assert-Test -Name "Codename: Script defines Krypton codename" -Condition ($Script:Codename -eq "Krypton")
