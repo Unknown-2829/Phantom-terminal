@@ -1,18 +1,18 @@
-﻿<#
+<#
 .SYNOPSIS
-    Phantom Terminal - Fast Native Installer v4.0.0
+    Phantom Terminal - Fast Native Installer v4.1.0
 .DESCRIPTION
     High-performance installer with robust config persistence and profile safety.
-    Run: irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.ps1 | iex
+    Run: irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.ps1 | iex
 #>
 
 # Fast init
 $ErrorActionPreference = "Stop"
-$InstallVersion = "4.0.0"
+$InstallVersion = "4.1.0"
 $InstallCodename = "Krypton"
 $ReleaseTag = "v$InstallVersion"
 $RepoUrl = "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/$ReleaseTag"
-$ExpectedSha256 = "b3115f3b4e6043d5ebfefd78d24485796f0ca5786429f8b67225d26f8d71e035"
+$ExpectedSha256 = "e0888184afc9681ff41690ff87a1057f5a84266044746d51d06c3c893faa29e8"
 $UserHome = if ($env:PHANTOM_HOME) { $env:PHANTOM_HOME } elseif ($env:UNKNOWN_HOME) { $env:UNKNOWN_HOME } elseif ($HOME) { $HOME } elseif ($env:USERPROFILE) { $env:USERPROFILE } else { [Environment]::GetFolderPath('UserProfile') }
 $ConfigDir = Join-Path $UserHome ".phantom-terminal"
 $InstallPath = Join-Path $ConfigDir "PhantomStartup.ps1"
@@ -92,9 +92,15 @@ if ($isInteractive) {
     try { Clear-Host } catch {}
 }
 Write-Host ""
-Write-Host "$Purple  ╔══════════════════════════════════════════════════════╗$R"
-Write-Host "$Purple  ║$Cyan    PHANTOM TERMINAL INSTALLER v4.0.0 `"$InstallCodename`"      $Purple║$R"
-Write-Host "$Purple  ╚══════════════════════════════════════════════════════╝$R"
+$title = "PHANTOM TERMINAL INSTALLER v$InstallVersion `"$InstallCodename`""
+$boxInner = 56
+$titlePad = [Math]::Max(0, $boxInner - $title.Length)
+$hl = [Math]::Floor($titlePad / 2)
+$hr = $titlePad - $hl
+$hLine = [string]::new([char]0x2550, $boxInner)
+Write-Host "$Purple  $([char]0x2554)$hLine$([char]0x2557)$R"
+Write-Host "$Purple  $([char]0x2551)$Cyan$(' ' * $hl)$title$(' ' * $hr)$Purple$([char]0x2551)$R"
+Write-Host "$Purple  $([char]0x255A)$hLine$([char]0x255D)$R"
 Write-Host ""
 
 # Detect existing installation
@@ -328,9 +334,15 @@ if (Test-Path "$InstallPath") {
     Write-Host "  $Green$b_plus Config saved to $ConfigFile$R"
 
     Write-Host ""
-    Write-Host "  $Green╔════════════════════════════════════════════════╗$R"
-    Write-Host "  $Green║ $White     INSTALLATION COMPLETE! (v4.0.0 `"$InstallCodename`")    $Green║$R"
-    Write-Host "  $Green╚════════════════════════════════════════════════╝$R"
+    $cTitle = "INSTALLATION COMPLETE! (v$InstallVersion `"$InstallCodename`")"
+    $cInner = 52
+    $cPad = [Math]::Max(0, $cInner - $cTitle.Length)
+    $cLeft = [Math]::Floor($cPad / 2)
+    $cRight = $cPad - $cLeft
+    $cHLine = [string]::new([char]0x2550, $cInner)
+    Write-Host "  $Green$([char]0x2554)$cHLine$([char]0x2557)$R"
+    Write-Host "  $Green$([char]0x2551)$White$(' ' * $cLeft)$cTitle$(' ' * $cRight)$Green$([char]0x2551)$R"
+    Write-Host "  $Green$([char]0x255A)$cHLine$([char]0x255D)$R"
     Write-Host ""
     Write-Host "  $Cyan Restart terminal or run: $White . `"$InstallPath`"$R"
     Write-Host ""

@@ -4,6 +4,40 @@ All notable changes to Phantom Terminal will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [4.1.0 "Krypton"] - 2026-10-18
+
+### Added
+- **Theme-Matched Rotating Sci-Fi Telemetry**:
+  - In Stealth Mode and customizable sessions, the Operator, Host, System/Kernel, and Uptime telemetry now dynamically rotate per session and match the active theme identity:
+    - **Phantom Theme**: Operators (`Ghost`, `Cipher`, `Spectre`, `Valkyrie`, `Null`, `Ronin`, `Phantom-0`), Hosts (`NEO-TOKYO-GRID`, `SHADOW-NET-CORE`, `ORBITAL-STATION-7`, `BLACK-ICE-NODE`, `NEURAL-MATRIX-01`, `PHANTOM-GATEWAY`), Systems (`Phantom OS v4.1.0 (Quantum Microkernel)`, `Phantom Neural Core v4.1.0 (Sub-atomic)`, `Phantom Mesh OS v4.1.0 (Encrypted)`, `Phantom Quantum Kernel v4.1.0 (Ring-0)`), and Uptimes (`∞ (Untraceable)`, `99.999% (Cloaked)`, `Sub-atomic Flux (Active)`, `Quantum Loop (Shielded)`).
+    - **Unknown Theme**: Operators (`Anonymous`, `Unknown-2829`, `Root-Null`, `Operator-X`, `Enigma`, `Cipher-2829`, `Shadow-Ghost`), Hosts (`DARKNET-GATEWAY`, `ANONYMOUS-NODE-X`, `NULL-SECTOR-404`, `CIPHER-GRID-2829`, `SHADOW-RELAY-0`, `VOID-MATRIX-2829`), Systems (`Unknown Kernel v4.1.0 (Zero Footprint)`, `Unknown Mesh OS v4.1.0 (Dark-Routing)`, `Unknown Void Subsystem v4.1.0`, `Unknown Protocol v4.1.0 (Ephemeral)`), and Uptimes (`Redacted (Zero-Log)`, `Hidden Route (Active)`, `Ephemeral Loop (Active)`, `Zero-Trace (Cloaked)`).
+  - Telemetry CPU and RAM metrics now feature a subtle randomized cyber flux in stealth sessions (8–16% CPU, 12–22% RAM).
+  - Stealth prompt path dynamically reflects the theme: `~/phantom/core/grid` for Phantom vs `~/unknown/darknet/grid` for Unknown.
+- **Enhanced Prompt Spacing**:
+  - Added clean double-spacing between the status indicator (`✔` / `✘`) and the prompt arrow (`»` / `>`) across PowerShell, Bash, and Zsh (`✔  » `), eliminating cramped text rendering in modern terminal fonts.
+- **Dedicated v4.1.0 Release Documentation**: Added comprehensive changelog documentation at `docs/changelogs/v4.1.0.md`.
+
+### Fixed
+- **Dashboard Box & Usage Bar Right-Border Overflow**:
+  - Resolved border misalignment where CPU and RAM rows pushed the right double-line border (`║`) 1 cell past the 66-column boundary in Windows Terminal, Linux, and macOS monospace fonts.
+  - Replaced ambiguous-width Unicode pictographs (`⚙` / `☰`) with standardized, font-resilient monospace labels (`CPU:` and `RAM:` padded to exactly 10 characters).
+  - Usage bar opening brackets `[` on CPU and RAM rows now align with pixel-perfect vertical precision at column 14.
+- **Quote Row Padding & Border Alignment**:
+  - Corrected quote row string construction in both PowerShell (`Show-Dashboard`) and Bash (`show_dashboard`) to output 2 spaces after the left vertical border, resolving an off-by-one indentation error where the right border closed 1 character inside the box boundary.
+- **Title Row Visual Centering & Emoji Width Accounting**:
+  - Accounted for the 2-cell display width of the skull glyph (`☠`) in modern terminal font engines (Cascadia Code, DirectWrite, CoreText, libvte).
+  - Added explicit 2-space breathing room between skulls and title text (`☠  UNKNOWN TERMINAL v4.1.0 "Krypton"  ☠`), preventing terminal font engines from rendering wide glyphs over adjacent text.
+- **Installer Header & Completion Box Centering**:
+  - Replaced hardcoded space padding in `install.ps1` and `install.sh` with dynamic mathematical centering, ensuring top corners (`╔`, `╗`), side borders (`║`), and bottom corners (`╚`, `╝`) align flawlessly regardless of version string or codename length.
+- **Test Suite Telemetry Matrix**:
+  - Updated `tests/test_engine.ps1` to validate rotating themed telemetry pools across both Phantom and Unknown themes, achieving 100% test pass rates across all 69 test assertions.
+
+### Changed
+- Bumped project version to **4.1.0** across `PhantomStartup.ps1`, `PhantomStartup.sh`, `install.ps1`, `install.sh`, `SHA256SUMS`, `README.md`, and test suites.
+- Recomputed release authenticity root-of-trust digests (`EXPECTED_SHA256` / `$ExpectedSha256`) and refreshed `SHA256SUMS`.
+
+---
+
 ## [4.0.0 "Krypton"] - 2026-10-17
 
 ### Added
@@ -431,6 +465,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[4.1.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v4.1.0
 [4.0.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v4.0.0
 [3.7.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.7.0
 [3.6.1]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.6.1

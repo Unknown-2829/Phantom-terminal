@@ -1,4 +1,4 @@
-﻿# Phantom Terminal v4.0.0 - Rigorous PowerShell Engine Test Suite
+# Phantom Terminal v4.1.0 - Rigorous PowerShell Engine Test Suite
 $ErrorActionPreference = "Stop"
 
 $PassCount = 0
@@ -19,7 +19,7 @@ function Assert-Test {
     }
 }
 
-Write-Host "`n=== Testing Phantom Terminal PowerShell v4.0.0 Engine ===`n" -ForegroundColor Cyan
+Write-Host "`n=== Testing Phantom Terminal PowerShell v4.1.0 Engine ===`n" -ForegroundColor Cyan
 
 # Test 1: Syntax / AST Parsing
 $scripts = @("PhantomStartup.ps1", "install.ps1", "tests\test_engine.ps1")
@@ -108,14 +108,26 @@ try {
 
 # Test 5: Cyberpunk Stealth Mode
 $origStealth = $Script:Config.StealthMode
+$origTheme = $Script:Config.Theme
+$origCurrTheme = $Script:CurrentTheme
 try {
     $Script:Config.StealthMode = $true
+    $Script:Config.Theme = "Phantom"
+    $Script:CurrentTheme = $Script:Themes["Phantom"]
     $stealthSpecs = Get-SystemMetrics
-    Assert-Test -Name "Stealth Mode: Spoofs Operator to Ghost" -Condition ($stealthSpecs.Operator -eq "Ghost")
-    Assert-Test -Name "Stealth Mode: Spoofs Host to NEO-TOKYO-GRID" -Condition ($stealthSpecs.Host -eq "NEO-TOKYO-GRID")
-    Assert-Test -Name "Stealth Mode: Spoofs System to Quantum OS" -Condition ($stealthSpecs.System -match "Phantom OS")
+    Assert-Test -Name "Stealth Mode: Spoofs Operator from Phantom theme list" -Condition ($stealthSpecs.Operator -in $Script:Themes["Phantom"].Operators)
+    Assert-Test -Name "Stealth Mode: Spoofs Host from Phantom theme list" -Condition ($stealthSpecs.Host -in $Script:Themes["Phantom"].Hosts)
+    Assert-Test -Name "Stealth Mode: Spoofs System from Phantom theme list" -Condition ($stealthSpecs.System -in $Script:Themes["Phantom"].Systems)
+
+    $Script:Config.Theme = "Unknown"
+    $Script:CurrentTheme = $Script:Themes["Unknown"]
+    $unkSpecs = Get-SystemMetrics
+    Assert-Test -Name "Stealth Mode: Spoofs Operator from Unknown theme list" -Condition ($unkSpecs.Operator -in $Script:Themes["Unknown"].Operators)
+    Assert-Test -Name "Stealth Mode: Spoofs Host from Unknown theme list" -Condition ($unkSpecs.Host -in $Script:Themes["Unknown"].Hosts)
 } finally {
     $Script:Config.StealthMode = $origStealth
+    $Script:Config.Theme = $origTheme
+    $Script:CurrentTheme = $origCurrTheme
 }
 
 # Test 6: Production Universal History Filter (Calling production Test-PhantomSensitiveCommand)
@@ -230,7 +242,7 @@ try {
     $env:CI = $origCI
 }
 
-$enginePromoted = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.0\.0"'
+$enginePromoted = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.1\.0"'
 $profileConfigured = (Get-Content $fakeProfile -Raw -ErrorAction SilentlyContinue) -match "Phantom Terminal START"
 
 Assert-Test -Name "Installer Integrity: Real installer validates and atomically promotes valid payload" -Condition ($installSuccess -and $enginePromoted -and $profileConfigured)
@@ -258,7 +270,7 @@ try {
     $env:CI = $origCI
 }
 
-$engineIntactAfterRemoteFail = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.0\.0"'
+$engineIntactAfterRemoteFail = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.1\.0"'
 Assert-Test -Name "Installer Integrity: Real installer fails closed on remote manifest/network failure" -Condition ($remoteFailedClosed -and $engineIntactAfterRemoteFail)
 
 # Test 10: Unknown-Terminal Peer Parity and Codename Krypton

@@ -1,6 +1,6 @@
-﻿<#
+<#
 .SYNOPSIS
-    Phantom Terminal - Advanced Native PowerShell Startup System v4.0.0
+    Phantom Terminal - Advanced Native PowerShell Startup System v4.1.0
 .DESCRIPTION
     Pure Native Shell cinematic startup, interactive cyber dashboard, live telemetry,
     smart history prediction, cyberpunk privacy spoofing, and AI agent guard.
@@ -8,14 +8,14 @@
 .NOTES
     Creator: @unknownlll2829 (Telegram)
     GitHub:  https://github.com/Unknown-2829/Phantom-terminal
-    Version: 4.0.0
+    Version: 4.1.0
 #>
 
 # ═══════════════════════════════════════════════════════════════════════════
 # VERSION & PATHS
 # ═══════════════════════════════════════════════════════════════════════════
 
-$Script:Version = "4.0.0"
+$Script:Version = "4.1.0"
 $Script:Codename = "Krypton"
 $Script:FullVersion = "v$Script:Version `"$Script:Codename`""
 $Script:RepoOwner = "Unknown-2829"
@@ -146,6 +146,10 @@ $Script:Themes = @{
             'The signal does not ask for permission to propagate.'
         )
         MatrixChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$'
+        Operators = @("Ghost", "Cipher", "Spectre", "Valkyrie", "Null", "Ronin", "Phantom-0")
+        Hosts     = @("NEO-TOKYO-GRID", "SHADOW-NET-CORE", "ORBITAL-STATION-7", "BLACK-ICE-NODE", "NEURAL-MATRIX-01", "PHANTOM-GATEWAY")
+        Systems   = @("Phantom OS v4.1.0 (Quantum Microkernel)", "Phantom Neural Core v4.1.0 (Sub-atomic)", "Phantom Mesh OS v4.1.0 (Encrypted)", "Phantom Quantum Kernel v4.1.0 (Ring-0)")
+        Uptimes   = @("∞ (Untraceable)", "99.999% (Cloaked)", "Sub-atomic Flux (Active)", "Quantum Loop (Shielded)")
     }
     Unknown = @{
         Name = "Unknown"
@@ -185,6 +189,10 @@ $Script:Themes = @{
             'Null is not empty; it is the presence of infinite potential.'
         )
         MatrixChars = 'UNKNOWN01?_-=+[]{}|;:,./'
+        Operators = @("Anonymous", "Unknown-2829", "Root-Null", "Operator-X", "Enigma", "Cipher-2829", "Shadow-Ghost")
+        Hosts     = @("DARKNET-GATEWAY", "ANONYMOUS-NODE-X", "NULL-SECTOR-404", "CIPHER-GRID-2829", "SHADOW-RELAY-0", "VOID-MATRIX-2829")
+        Systems   = @("Unknown Kernel v4.1.0 (Zero Footprint)", "Unknown Mesh OS v4.1.0 (Dark-Routing)", "Unknown Void Subsystem v4.1.0", "Unknown Protocol v4.1.0 (Ephemeral)")
+        Uptimes   = @("Redacted (Zero-Log)", "Hidden Route (Active)", "Ephemeral Loop (Active)", "Zero-Trace (Cloaked)")
     }
 }
 
@@ -603,7 +611,7 @@ $Script:Symbols = @{
     Skull = "[X]"; Shield = "[#]"; Lock = "[=]"; Key = "[-]"
     HighVoltage = "[!]"; Success = "[+]"; Failure = "[x]"
     Prompt = ">"; Update = "[U]"
-    CPU = "[C]"; RAM = "[R]"
+    CPU = "CPU"; RAM = "RAM"
     HLine = "="; VLine = "|"
     TopLeft = "+"; TopRight = "+"; BottomLeft = "+"; BottomRight = "+"
     TLeft = "+"; TRight = "+"
@@ -616,7 +624,7 @@ try {
         Skull = [char]0x2620; Shield = [char]0x2591; Lock = [char]0x25A0; Key = [char]0x25CF
         HighVoltage = [char]0x26A1; Success = [char]0x2714; Failure = [char]0x2718
         Prompt = [char]0x00BB; Update = [char]0x21BB
-        CPU = [char]0x2699; RAM = [char]0x2630
+        CPU = "CPU"; RAM = "RAM"
         HLine = [char]0x2550; VLine = [char]0x2551
         TopLeft = [char]0x2554; TopRight = [char]0x2557; BottomLeft = [char]0x255A; BottomRight = [char]0x255D
         TLeft = [char]0x2560; TRight = [char]0x2563
@@ -756,12 +764,14 @@ function Get-SystemMetrics {
 
     # Cyberpunk Stealth / Spoofing Mode
     if ($Script:Config.StealthMode) {
-        $specs.Operator = "Ghost"
-        $specs.Host     = "NEO-TOKYO-GRID"
-        $specs.System   = "Phantom OS v4.0.0 (Quantum Microkernel)"
-        $specs.Uptime   = "∞ (Untraceable)"
-        $specs.CPU      = 12
-        $specs.RAM      = 14
+        $theme = $Script:CurrentTheme
+        if (-not $theme) { $theme = $Script:Themes["Phantom"] }
+        if ($theme.Operators) { $specs.Operator = Get-Random -InputObject $theme.Operators } else { $specs.Operator = "Ghost" }
+        if ($theme.Hosts)     { $specs.Host     = Get-Random -InputObject $theme.Hosts } else { $specs.Host = "NEO-TOKYO-GRID" }
+        if ($theme.Systems)   { $specs.System   = Get-Random -InputObject $theme.Systems } else { $specs.System = "Phantom OS v4.1.0 (Quantum Microkernel)" }
+        if ($theme.Uptimes)   { $specs.Uptime   = Get-Random -InputObject $theme.Uptimes } else { $specs.Uptime = "∞ (Untraceable)" }
+        $specs.CPU      = Get-Random -Minimum 8 -Maximum 16
+        $specs.RAM      = Get-Random -Minimum 12 -Maximum 22
     }
 
     return $specs
@@ -789,12 +799,16 @@ function Render-UsageBarLine {
     if ($Percent -gt 80) { $barColor = $Script:Colors.BloodRed }
     elseif ($Percent -gt 60) { $barColor = $Script:Colors.Orange }
 
-    # Visible text: "  " + Label + " [" + Bar (BarWidth) + "] " + Percent (3) + "%"
-    $cleanLen = 2 + $Label.Length + 1 + 1 + $BarWidth + 1 + 1 + 3 + 1
+    # Pad label to exactly 10 characters so brackets align identically across all rows
+    $cleanLabel = $Label.PadRight(10)
+    if ($cleanLabel.Length -gt 10) { $cleanLabel = $cleanLabel.Substring(0, 10) }
+
+    # Visible text: "  " (2) + cleanLabel (10) + "[" (1) + Bar (BarWidth) + "] " (2) + Percent (3) + "%" (1)
+    $cleanLen = 2 + 10 + 1 + $BarWidth + 2 + 3 + 1
     $rightPad = [Math]::Max(0, $InnerWidth - $cleanLen)
     $padStr = " " * $rightPad
 
-    return "$Indent$Primary$($Script:Symbols.VLine)$($Script:Colors.White)  $($Script:Colors.White)$Label $($Script:Colors.DarkGray)[$barColor$bar$($Script:Colors.DarkGray)] $($Script:Colors.White)$($Percent.ToString().PadLeft(3))%$padStr$Primary$($Script:Symbols.VLine)$($Script:Colors.Reset)"
+    return "$Indent$Primary$($Script:Symbols.VLine)  $($Script:Colors.White)$cleanLabel$($Script:Colors.DarkGray)[$barColor$bar$($Script:Colors.DarkGray)] $($Script:Colors.White)$($Percent.ToString().PadLeft(3))%$padStr$Primary$($Script:Symbols.VLine)$($Script:Colors.Reset)"
 }
 
 function Show-Dashboard {
@@ -825,11 +839,13 @@ function Show-Dashboard {
     Write-Host "$indent$primary$($Script:Symbols.TopLeft)$hLine$($Script:Symbols.TopRight)$($Script:Colors.Reset)"
 
     # Title Row
-    $title = "$($Script:Symbols.Skull) $($Script:CurrentTheme.Title) v$Script:Version `"$Script:Codename`" $($Script:Symbols.Skull)"
-    $titlePad = [Math]::Max(0, $inner - $title.Length)
+    $titleText = "$($Script:CurrentTheme.Title) v$Script:Version `"$Script:Codename`""
+    $skullVisual = 2
+    $titleVisual = ($skullVisual + 2) + $titleText.Length + (2 + $skullVisual)
+    $titlePad = [Math]::Max(0, $inner - $titleVisual)
     $halfLeft = [Math]::Floor($titlePad / 2)
     $halfRight = $titlePad - $halfLeft
-    Write-Host "$indent$primary$($Script:Symbols.VLine)$(' ' * $halfLeft)$secondary$title$primary$(' ' * $halfRight)$($Script:Symbols.VLine)$($Script:Colors.Reset)"
+    Write-Host "$indent$primary$($Script:Symbols.VLine)$(' ' * $halfLeft)$secondary$($Script:Symbols.Skull)  $titleText  $($Script:Symbols.Skull)$primary$(' ' * $halfRight)$($Script:Symbols.VLine)$($Script:Colors.Reset)"
 
     Write-Host "$indent$primary$($Script:Symbols.TLeft)$hLine$($Script:Symbols.TRight)$($Script:Colors.Reset)"
 
@@ -872,8 +888,8 @@ function Show-Dashboard {
                 }
             }
 
-            Write-Host (Render-UsageBarLine -Indent $indent -Primary $primary -Label "$($Script:Symbols.CPU) CPU  " -Percent $specs.CPU -BarWidth $barW -InnerWidth $inner)
-            Write-Host (Render-UsageBarLine -Indent $indent -Primary $primary -Label "$($Script:Symbols.RAM) RAM  " -Percent $specs.RAM -BarWidth $barW -InnerWidth $inner)
+            Write-Host (Render-UsageBarLine -Indent $indent -Primary $primary -Label "CPU:" -Percent $specs.CPU -BarWidth $barW -InnerWidth $inner)
+            Write-Host (Render-UsageBarLine -Indent $indent -Primary $primary -Label "RAM:" -Percent $specs.RAM -BarWidth $barW -InnerWidth $inner)
         }
 
         Write-Host "$indent$primary$($Script:Symbols.TLeft)$hLine$($Script:Symbols.TRight)$($Script:Colors.Reset)"
@@ -885,7 +901,7 @@ function Show-Dashboard {
         $quote = $quote.Substring(0, [Math]::Max(10, $inner - 7)) + "..."
     }
     $quotePad = [Math]::Max(0, $inner - $quote.Length - 2)
-    Write-Host "$indent$primary$($Script:Symbols.VLine) $($Script:Colors.Gray)$quote$primary$(' ' * $quotePad)$($Script:Symbols.VLine)$($Script:Colors.Reset)"
+    Write-Host "$indent$primary$($Script:Symbols.VLine)  $($Script:Colors.Gray)$quote$primary$(' ' * $quotePad)$($Script:Symbols.VLine)$($Script:Colors.Reset)"
 
     # Box Bottom Border
     Write-Host "$indent$primary$($Script:Symbols.BottomLeft)$hLine$($Script:Symbols.BottomRight)$($Script:Colors.Reset)"
@@ -1274,7 +1290,7 @@ function Set-PhantomPrompt {
 
         # Path resolution
         if ($Script:Config.StealthMode) {
-            $pathDisplay = "~/phantom/core/grid"
+            $pathDisplay = if ($Script:Config.Theme -eq "Unknown") { "~/unknown/darknet/grid" } else { "~/phantom/core/grid" }
         } elseif ($Script:Config.ShowFullPath) {
             $pathDisplay = (Get-Location).Path
         } else {
@@ -1319,9 +1335,11 @@ function Set-PhantomPrompt {
 
         $status = if ($lastSuccess) { "$($Script:Colors.NeonGreen)$($Script:Symbols.Success)" } else { "$($Script:Colors.BloodRed)$($Script:Symbols.Failure)" }
         $primary = Get-ThemeColor "Primary"
-        $user = if ($Script:Config.StealthMode) { "ghost" } else { $env:USERNAME }
+        $user = if ($Script:Config.StealthMode) {
+            if ($Script:Config.Theme -eq "Unknown") { "unknown" } else { "ghost" }
+        } else { $env:USERNAME }
 
-        "$primary$user$($Script:Colors.DarkGray)@$($Script:Colors.NeonCyan)$pathDisplay$gitBranch$($Script:Colors.Reset)`n$status $primary$($Script:Symbols.Prompt)$($Script:Colors.Reset) "
+        "$primary$user$($Script:Colors.DarkGray)@$($Script:Colors.NeonCyan)$pathDisplay$gitBranch$($Script:Colors.Reset)`n$status  $primary$($Script:Symbols.Prompt)$($Script:Colors.Reset) "
     }
 }
 

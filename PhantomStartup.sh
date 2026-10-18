@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Phantom Terminal - Advanced Native Shell Startup System v4.0.0
+# Phantom Terminal - Advanced Native Shell Startup System v4.1.0
 # Cross-platform startup animation, live telemetry, and privacy spoofing
 # Supports: Linux, macOS, Termux (Android)
 # Creator  : @unknownlll2829 (Telegram)
 # GitHub   : https://github.com/Unknown-2829/Phantom-terminal
 #
 
-SCRIPT_VERSION="4.0.0"
+SCRIPT_VERSION="4.1.0"
 SCRIPT_CODENAME="Krypton"
 SCRIPT_FULL_VERSION="v${SCRIPT_VERSION} \"${SCRIPT_CODENAME}\""
 REPO_OWNER="Unknown-2829"
@@ -76,7 +76,7 @@ _supports_unicode() {
 if _supports_unicode; then
     SKULL="☠";  SHIELD="░";  LOCK="■"
     HIGH_VOLTAGE="⚡"; SUCCESS="✔"; FAILURE="✘"
-    PROMPT="»"; CPU="⚙"; RAM="☰"; UPDATE="⟳"
+    PROMPT="»"; CPU="CPU"; RAM="RAM"; UPDATE="⟳"
     HLINE="═"; VLINE="║"; TOP_LEFT="╔"; TOP_RIGHT="╗"
     BOTTOM_LEFT="╚"; BOTTOM_RIGHT="╝"; T_LEFT="╠"; T_RIGHT="╣"
     BLOCK="█"; BLOCK_EMPTY="░"
@@ -84,7 +84,7 @@ if _supports_unicode; then
 else
     SKULL="[X]"; SHIELD="[#]"; LOCK="[=]"
     HIGH_VOLTAGE="[!]"; SUCCESS="[+]"; FAILURE="[x]"
-    PROMPT=">"; CPU="[C]"; RAM="[R]"; UPDATE="[*]"
+    PROMPT=">"; CPU="CPU"; RAM="RAM"; UPDATE="[*]"
     HLINE="="; VLINE="|"; TOP_LEFT="+"; TOP_RIGHT="+"
     BOTTOM_LEFT="+"; BOTTOM_RIGHT="+"; T_LEFT="+"; T_RIGHT="+"
     BLOCK="#"; BLOCK_EMPTY="-"
@@ -522,14 +522,14 @@ write_usage_bar() {
     for ((i=0; i<filled;     i++)); do bar+="$BLOCK";       done
     for ((i=filled; i<bar_w; i++)); do bar+="$BLOCK_EMPTY"; done
 
-    local lvl; lvl=$(_vlen "$label")
-    local clen=$(( 2 + lvl + 1 + 1 + bar_w + 1 + 1 + 4 ))
+    local clean_lbl; clean_lbl=$(printf "%-10s" "$label")
+    local clen=$(( 2 + 10 + 1 + bar_w + 2 + 4 ))
     local rpad=$(( inner - clen ))
     [[ $rpad -lt 0 ]] && rpad=0
 
-    printf "%s%b%s%b  %b%s%b %b[%b%s%b%b]%b %b%3d%%%b%*s%b%s%b\n" \
+    printf "%s%b%s%b  %b%s%b%b[%b%s%b%b]%b %b%3d%%%b%*s%b%s%b\n" \
         "$indent" "$PRIMARY" "$VLINE" "$RESET" \
-        "$WHITE" "$label" "$RESET" \
+        "$WHITE" "$clean_lbl" "$RESET" \
         "$DARK_GRAY" "$bc" "$bar" "$RESET" "$DARK_GRAY" "$RESET" \
         "$WHITE" "$usage" "$RESET" \
         "$rpad" "" \
@@ -584,12 +584,23 @@ show_dashboard() {
 
     # Cyberpunk Stealth / Spoofing Mode
     if [[ "$STEALTH_MODE" == "true" ]]; then
-        user="ghost"
-        host="NEO-TOKYO-GRID"
-        os="Phantom OS v4.0.0 (Quantum Microkernel)"
-        uptime_str="∞ (Untraceable)"
-        cpu_u=12
-        ram_u=14
+        if [[ "$THEME" == "Unknown" ]]; then
+            local ops=("Anonymous" "Unknown-2829" "Root-Null" "Operator-X" "Enigma" "Cipher-2829" "Shadow-Ghost")
+            local hosts=("DARKNET-GATEWAY" "ANONYMOUS-NODE-X" "NULL-SECTOR-404" "CIPHER-GRID-2829" "SHADOW-RELAY-0" "VOID-MATRIX-2829")
+            local systems=("Unknown Kernel v4.1.0 (Zero Footprint)" "Unknown Mesh OS v4.1.0 (Dark-Routing)" "Unknown Void Subsystem v4.1.0" "Unknown Protocol v4.1.0 (Ephemeral)")
+            local uptimes=("Redacted (Zero-Log)" "Hidden Route (Active)" "Ephemeral Loop (Active)" "Zero-Trace (Cloaked)")
+        else
+            local ops=("Ghost" "Cipher" "Spectre" "Valkyrie" "Null" "Ronin" "Phantom-0")
+            local hosts=("NEO-TOKYO-GRID" "SHADOW-NET-CORE" "ORBITAL-STATION-7" "BLACK-ICE-NODE" "NEURAL-MATRIX-01" "PHANTOM-GATEWAY")
+            local systems=("Phantom OS v4.1.0 (Quantum Microkernel)" "Phantom Neural Core v4.1.0 (Sub-atomic)" "Phantom Mesh OS v4.1.0 (Encrypted)" "Phantom Quantum Kernel v4.1.0 (Ring-0)")
+            local uptimes=("∞ (Untraceable)" "99.999% (Cloaked)" "Sub-atomic Flux (Active)" "Quantum Loop (Shielded)")
+        fi
+        user="${ops[$(( RANDOM % ${#ops[@]} ))]}"
+        host="${hosts[$(( RANDOM % ${#hosts[@]} ))]}"
+        os="${systems[$(( RANDOM % ${#systems[@]} ))]}"
+        uptime_str="${uptimes[$(( RANDOM % ${#uptimes[@]} ))]}"
+        cpu_u=$(( 9 + RANDOM % 7 ))
+        ram_u=$(( 12 + RANDOM % 8 ))
     fi
 
     echo ""
@@ -635,13 +646,15 @@ show_dashboard() {
     _border "$TOP_LEFT" "$TOP_RIGHT"
 
     # Centered Title Row
-    local title_str="$SKULL $TITLE v$SCRIPT_VERSION \"$SCRIPT_CODENAME\" $SKULL"
-    local tvl; tvl=$(_vlen "$title_str")
-    local tpad=$(( inner - tvl ))
+    local skull_w=2
+    local title_text="$TITLE v$SCRIPT_VERSION \"$SCRIPT_CODENAME\""
+    local title_vis=$(( (skull_w + 2) + ${#title_text} + (2 + skull_w) ))
+    local tpad=$(( inner - title_vis ))
+    [[ $tpad -lt 0 ]] && tpad=0
     local hl=$(( tpad / 2 )); local hr=$(( tpad - hl ))
-    printf "%s%b%s%*s%b%s%b%*s%b%s%b\n" \
+    printf "%s%b%s%*s%b%s  %s  %s%b%*s%b%s%b\n" \
         "$ind" "$PRIMARY" "$VLINE" \
-        "$hl" "" "$SECONDARY" "$title_str" "$RESET" \
+        "$hl" "" "$SECONDARY" "$SKULL" "$title_text" "$SKULL" "$RESET" \
         "$hr" "" "$PRIMARY" "$VLINE" "$RESET"
 
     _border "$T_LEFT" "$T_RIGHT"
@@ -658,8 +671,8 @@ show_dashboard() {
             local bar_w=$(( inner - 24 ))
             [[ $bar_w -lt 8 ]] && bar_w=8
             [[ $bar_w -gt 24 ]] && bar_w=24
-            write_usage_bar "$ind" "$CPU CPU  " "$cpu_u" "$bar_w" "$inner"
-            write_usage_bar "$ind" "$RAM RAM  " "$ram_u" "$bar_w" "$inner"
+            write_usage_bar "$ind" "CPU:" "$cpu_u" "$bar_w" "$inner"
+            write_usage_bar "$ind" "RAM:" "$ram_u" "$bar_w" "$inner"
         fi
         _border "$T_LEFT" "$T_RIGHT"
     fi
@@ -674,7 +687,7 @@ show_dashboard() {
     done
     local qpad=$(( inner - qvl - 2 ))
     [[ $qpad -lt 0 ]] && qpad=0
-    printf "%s%b%s %b%s%b%*s%b%s%b\n" \
+    printf "%s%b%s  %b%s%b%*s%b%s%b\n" \
         "$ind" "$PRIMARY" "$VLINE" \
         "$GRAY" "$quote" "$RESET" \
         "$qpad" "" \
@@ -1438,8 +1451,13 @@ set_phantom_prompt() {
         local path_d
         local user_d="${USER:-$(whoami 2>/dev/null || echo 'user')}"
         if [[ "$STEALTH_MODE" == "true" ]]; then
-            path_d="~/phantom/core/grid"
-            user_d="ghost"
+            if [[ "$THEME" == "Unknown" ]]; then
+                path_d="~/unknown/darknet/grid"
+                user_d="unknown"
+            else
+                path_d="~/phantom/core/grid"
+                user_d="ghost"
+            fi
         elif [[ "$SHOW_FULL_PATH" == "true" ]]; then
             path_d="$PWD"
         else
@@ -1478,7 +1496,7 @@ set_phantom_prompt() {
         done
 
         local sym; [[ $s -eq 0 ]] && sym="${NEON_GREEN}${SUCCESS}" || sym="${BLOOD_RED}${FAILURE}"
-        PS1="${PRIMARY}${user_d}${DARK_GRAY}@${NEON_CYAN}${path_d}${git_b}${RESET}"$'\n'"${sym} ${PRIMARY}${PROMPT}${RESET} "
+        PS1="${PRIMARY}${user_d}${DARK_GRAY}@${NEON_CYAN}${path_d}${git_b}${RESET}"$'\n'"${sym}  ${PRIMARY}${PROMPT}${RESET} "
     }
 
     if [[ -n "${ZSH_VERSION:-}" ]]; then

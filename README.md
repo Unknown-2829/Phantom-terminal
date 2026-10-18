@@ -1,7 +1,7 @@
-# 🔮 Phantom Terminal v4.0.0 "Krypton"
+# 🔮 Phantom Terminal v4.1.0 "Krypton"
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-4.0.0_%22Krypton%22-purple?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-4.1.0_%22Krypton%22-purple?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/PowerShell-5.1%2B-blue?style=for-the-badge&logo=powershell" alt="PowerShell">
   <img src="https://img.shields.io/badge/Bash-3.2%2B-green?style=for-the-badge&logo=gnu-bash" alt="Bash">
   <img src="https://img.shields.io/badge/Windows-10%2F11-0078D6?style=for-the-badge&logo=windows" alt="Windows">
@@ -25,17 +25,17 @@ Install in seconds with a single command. **Zero external dependencies** — req
 
 ### Windows (PowerShell 5.1+ / 7+)
 ```powershell
-irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.ps1 | iex
+irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.ps1 | iex
 ```
 
 ### Linux / macOS / Termux (Bash / Zsh)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.sh | bash
 ```
 
 *or with wget:*
 ```bash
-wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.sh | bash
 ```
 
 ### 🛡️ Two-Step Checksum Verification
@@ -44,22 +44,22 @@ To verify download integrity against in-transit corruption or transfer errors pr
 
 **Linux / Android Termux:**
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh
-curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/SHA256SUMS
+curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.sh
+curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/SHA256SUMS
 grep "install.sh" SHA256SUMS | sha256sum -c - && bash install.sh
 ```
 
 **macOS / BSD:**
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh
-curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/SHA256SUMS
+curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.sh
+curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/SHA256SUMS
 grep "install.sh" SHA256SUMS | shasum -a 256 -c - && bash install.sh
 ```
 
 **Windows PowerShell:**
 ```powershell
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.ps1" -OutFile install.ps1
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/SHA256SUMS" -OutFile SHA256SUMS
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.ps1" -OutFile install.ps1
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/SHA256SUMS" -OutFile SHA256SUMS
 $expected = (Get-Content SHA256SUMS | Where-Object { $_ -match '\s+install\.ps1$' } | ForEach-Object { ($_ -split '\s+')[0] })
 if ((Get-FileHash install.ps1 -Algorithm SHA256).Hash.ToLower() -eq $expected.ToLower()) { .\install.ps1 } else { throw "Checksum mismatch" }
 ```
@@ -240,7 +240,7 @@ If you prefer not to use the automated one-line installer:
 ```powershell
 $dir = "$HOME\.phantom-terminal"
 if (!(Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force }
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/PhantomStartup.ps1" -OutFile "$dir\PhantomStartup.ps1"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/PhantomStartup.ps1" -OutFile "$dir\PhantomStartup.ps1"
 
 if (!(Test-Path $PROFILE)) { New-Item -Path $PROFILE -ItemType File -Force }
 Add-Content $PROFILE "`n# >>> Phantom Terminal START >>>`nif (Test-Path `"$dir\PhantomStartup.ps1`") { . `"$dir\PhantomStartup.ps1`" }`n# <<< Phantom Terminal END <<<"
@@ -249,7 +249,7 @@ Add-Content $PROFILE "`n# >>> Phantom Terminal START >>>`nif (Test-Path `"$dir\P
 #### Linux / macOS / Termux
 ```bash
 mkdir -p ~/.phantom-terminal
-curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/PhantomStartup.sh -o ~/.phantom-terminal/PhantomStartup.sh
+curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/PhantomStartup.sh -o ~/.phantom-terminal/PhantomStartup.sh
 chmod +x ~/.phantom-terminal/PhantomStartup.sh
 
 cat >> ~/.bashrc << 'EOF'
@@ -281,7 +281,7 @@ rm -rf ~/.phantom-terminal
 ---
 
 ## 📜 Changelog
-All historical releases and changes are documented in [CHANGELOG.md](CHANGELOG.md). Detailed release notes for the current release are available in [v4.0.0 Release Notes](docs/changelogs/v4.0.0.md).
+All historical releases and changes are documented in [CHANGELOG.md](CHANGELOG.md). Detailed release notes for the current release are available in [v4.1.0 Release Notes](docs/changelogs/v4.1.0.md).
 
 ---
 

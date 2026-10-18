@@ -23,7 +23,7 @@ If you discover a security vulnerability in Phantom Terminal:
 
 We will review and acknowledge all reports within 48 hours.
 
-## Security Architecture in v4.0.0+
+## Security Architecture in v4.1.0+
 
 - **Zero-Dependency Native Execution**: Phantom Terminal requires no external compilers, Python runtime, or package managers. Scripts run purely via native Windows PowerShell, PowerShell 7+, Bash, and Zsh.
 - **Opt-in Silent Updates**: `SilentUpdate` is disabled by default (`false`), ensuring automated background updates only run when explicitly configured by the user.
@@ -41,13 +41,13 @@ We will review and acknowledge all reports within 48 hours.
   - Piping any script directly from `curl | bash` or `irm | iex` relies on transport security (HTTPS) to deliver an unmodified script. For users who wish to verify file integrity against in-transit corruption or CDN tampering prior to execution, download the installer and manifest, verify the SHA-256 hash, and execute the verified file:
     ```bash
     # Linux / Termux:
-    curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh
-    curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/SHA256SUMS
+    curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.sh
+    curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/SHA256SUMS
     grep "install.sh" SHA256SUMS | sha256sum -c - && bash install.sh
 
     # macOS / BSD:
-    curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh
-    curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/SHA256SUMS
+    curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.sh
+    curl -fsSLO https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/SHA256SUMS
     grep "install.sh" SHA256SUMS | shasum -a 256 -c - && bash install.sh
     ```
 - **Best-Effort History Sanitization**: Universal history searches (`phantom-search`) provide best-effort heuristic filtering of targeted credential patterns (flags such as `--password`, `--token`, `Authorization: Bearer`, exported API keys, private key files) and strip shell timestamp prefixes. Because arbitrary user variables or custom argument structures cannot be fully parsed without an AST of every external CLI tool, this feature is a privacy convenience rather than a cryptographically enforced secret boundary.

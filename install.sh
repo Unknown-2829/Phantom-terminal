@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Phantom Terminal - Universal Native Installer v4.0.0
+# Phantom Terminal - Universal Native Installer v4.1.0
 # Cross-platform installer with automatic platform detection and ZERO external dependencies.
 # Supports: Linux, macOS, Termux (Android), BSD
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh | bash
-#   wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.0.0/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.sh | bash
+#   wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.sh | bash
 #
 
 set -u
@@ -72,11 +72,11 @@ PLATFORM=$(detect_platform)
 # VARIABLES & PATHS
 # ═══════════════════════════════════════════════════════════════════════════
 
-INSTALL_VERSION="4.0.0"
+INSTALL_VERSION="4.1.0"
 INSTALL_CODENAME="Krypton"
 RELEASE_TAG="v$INSTALL_VERSION"
 REPO_URL="https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/$RELEASE_TAG"
-EXPECTED_SHA256="28381135b9221a3be43215c86e9f9eebca6108ec246145aad0ab7531b02f3c7a"
+EXPECTED_SHA256="4adf4188a5155d4726f70079922d53aa21cec7477a65abb1f9b40f4ceecb1f1b"
 TARGET_HOME="${PHANTOM_HOME:-${UNKNOWN_HOME:-$HOME}}"
 CONFIG_DIR="$TARGET_HOME/.phantom-terminal"
 CONFIG_FILE="$CONFIG_DIR/config.json"
@@ -223,9 +223,16 @@ fi
 
 clear 2>/dev/null || true
 echo ""
-echo "${PURPLE}  ╔══════════════════════════════════════════════════════╗${R}"
-echo "${PURPLE}  ║${CYAN}    PHANTOM TERMINAL INSTALLER v4.0.0 \"$INSTALL_CODENAME\"      ${PURPLE}║${R}"
-echo "${PURPLE}  ╚══════════════════════════════════════════════════════╝${R}"
+title="PHANTOM TERMINAL INSTALLER v$INSTALL_VERSION \"$INSTALL_CODENAME\""
+box_inner=56
+pad=$(( box_inner - ${#title} ))
+hl=$(( pad / 2 ))
+hr=$(( pad - hl ))
+hln=""
+for ((i=0; i<box_inner; i++)); do hln+="═"; done
+echo "${PURPLE}  ╔${hln}╗${R}"
+printf "${PURPLE}  ║${CYAN}%*s%s%*s${PURPLE}║${R}\n" "$hl" "" "$title" "$hr" ""
+echo "${PURPLE}  ╚${hln}╝${R}"
 echo ""
 
 case "$PLATFORM" in
@@ -601,9 +608,16 @@ echo ""
 trap - EXIT
 INSTALL_ERRORS=0
 
-echo "  ${GREEN}╔════════════════════════════════════════════════╗${R}"
-echo "  ${GREEN}║${WHITE}     INSTALLATION COMPLETE! (v4.0.0 \"$INSTALL_CODENAME\")    ${GREEN}║${R}"
-echo "  ${GREEN}╚════════════════════════════════════════════════╝${R}"
+c_title="INSTALLATION COMPLETE! (v$INSTALL_VERSION \"$INSTALL_CODENAME\")"
+c_inner=52
+c_pad=$(( c_inner - ${#c_title} ))
+c_left=$(( c_pad / 2 ))
+c_right=$(( c_pad - c_left ))
+c_hln=""
+for ((i=0; i<c_inner; i++)); do c_hln+="═"; done
+echo "  ${GREEN}╔${c_hln}╗${R}"
+printf "  ${GREEN}║${WHITE}%*s%s%*s${GREEN}║${R}\n" "$c_left" "" "$c_title" "$c_right" ""
+echo "  ${GREEN}╚${c_hln}╝${R}"
 echo ""
 echo "  ${CYAN}Restart your terminal or run:${R}"
 echo "  ${WHITE}source $PROFILE${R}"
