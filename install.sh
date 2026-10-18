@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Phantom Terminal - Universal Native Installer v4.1.0
+# Phantom Terminal - Universal Native Installer v4.2.1
 # Cross-platform installer with automatic platform detection and ZERO external dependencies.
 # Supports: Linux, macOS, Termux (Android), BSD
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.sh | bash
-#   wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.1/install.sh | bash
+#   wget -qO- https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.1/install.sh | bash
 #
 
 set -u
@@ -72,11 +72,11 @@ PLATFORM=$(detect_platform)
 # VARIABLES & PATHS
 # ═══════════════════════════════════════════════════════════════════════════
 
-INSTALL_VERSION="4.1.0"
+INSTALL_VERSION="4.2.1"
 INSTALL_CODENAME="Krypton"
 RELEASE_TAG="v$INSTALL_VERSION"
 REPO_URL="https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/$RELEASE_TAG"
-EXPECTED_SHA256="4adf4188a5155d4726f70079922d53aa21cec7477a65abb1f9b40f4ceecb1f1b"
+EXPECTED_SHA256="e71d300f9047948e443919d757abc0d045a868ba99e66f3de8fe8a87afdf8c54"
 TARGET_HOME="${PHANTOM_HOME:-${UNKNOWN_HOME:-$HOME}}"
 CONFIG_DIR="$TARGET_HOME/.phantom-terminal"
 CONFIG_FILE="$CONFIG_DIR/config.json"
@@ -277,6 +277,9 @@ AUTO_UPDATE=true
 SHOW_SYSTEM_INFO=true
 SMART_SUGGESTIONS=true
 STEALTH_MODE=false
+STEALTH_MASK_PATH=false
+AI_BYPASS=true
+ALLOW_VSCODE_ANIMATIONS=true
 LIVE_STATS=false
 SHOW_USAGE_BARS=true
 
@@ -301,6 +304,9 @@ if [[ -f "$CONFIG_FILE" ]]; then
         SHOW_SYSTEM_INFO=$(to_bool "$(jq -r '.ShowSystemInfo // true' "$CONFIG_FILE" 2>/dev/null)")
         SMART_SUGGESTIONS=$(to_bool "$(jq -r '.SmartSuggestions // true' "$CONFIG_FILE" 2>/dev/null)")
         STEALTH_MODE=$(to_bool "$(jq -r '.StealthMode // false' "$CONFIG_FILE" 2>/dev/null)")
+        STEALTH_MASK_PATH=$(to_bool "$(jq -r '.StealthMaskPath // false' "$CONFIG_FILE" 2>/dev/null)")
+        AI_BYPASS=$(to_bool "$(jq -r '.AIBypass // true' "$CONFIG_FILE" 2>/dev/null)")
+        ALLOW_VSCODE_ANIMATIONS=$(to_bool "$(jq -r '.AllowVSCodeAnimations // true' "$CONFIG_FILE" 2>/dev/null)")
         LIVE_STATS=$(to_bool "$(jq -r '.LiveStats // false' "$CONFIG_FILE" 2>/dev/null)")
         SHOW_USAGE_BARS=$(to_bool "$(jq -r '.ShowUsageBars // true' "$CONFIG_FILE" 2>/dev/null)")
     else
@@ -326,6 +332,9 @@ if [[ -f "$CONFIG_FILE" ]]; then
         SHOW_SYSTEM_INFO=$(to_bool "$(parse_cfg "ShowSystemInfo" "true")")
         SMART_SUGGESTIONS=$(to_bool "$(parse_cfg "SmartSuggestions" "true")")
         STEALTH_MODE=$(to_bool "$(parse_cfg "StealthMode" "false")")
+        STEALTH_MASK_PATH=$(to_bool "$(parse_cfg "StealthMaskPath" "false")")
+        AI_BYPASS=$(to_bool "$(parse_cfg "AIBypass" "true")")
+        ALLOW_VSCODE_ANIMATIONS=$(to_bool "$(parse_cfg "AllowVSCodeAnimations" "true")")
         LIVE_STATS=$(to_bool "$(parse_cfg "LiveStats" "false")")
         SHOW_USAGE_BARS=$(to_bool "$(parse_cfg "ShowUsageBars" "true")")
     fi
@@ -593,12 +602,30 @@ cat > "$CONFIG_FILE" <<EOF
   "SilentUpdate": false,
   "UpdateCheckDays": 1,
   "StealthMode": $STEALTH_MODE,
+  "StealthMaskPath": $STEALTH_MASK_PATH,
+  "AIBypass": $AI_BYPASS,
+  "AllowVSCodeAnimations": $ALLOW_VSCODE_ANIMATIONS,
   "LiveStats": $LIVE_STATS,
   "ShowUsageBars": $SHOW_USAGE_BARS
 }
 EOF
 
 echo "  ${GREEN}[+] Config saved to $CONFIG_FILE${R}"
+
+# Initialize cache for fresh installs (so upgrade modal is NOT shown on new installs)
+CACHE_FILE="$CONFIG_DIR/cache.json"
+if [[ ! -f "$CACHE_FILE" ]]; then
+    now_epoch=$(date +%s 2>/dev/null || echo 0)
+    cat > "$CACHE_FILE" <<EOF
+{
+  "LastUpdateCheck": "$now_epoch",
+  "LatestVersion": "$INSTALL_VERSION",
+  "UpdateAvailable": false,
+  "UpdateDownloaded": false,
+  "LastSeenVersion": "$INSTALL_VERSION"
+}
+EOF
+fi
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════════════

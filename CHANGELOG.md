@@ -4,6 +4,37 @@ All notable changes to Phantom Terminal will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [4.2.1 "Krypton"] - 2026-10-18
+
+### Added
+- **Configurable AI Agent Guard Bypass (`AIBypass`)**:
+  - Auto AI bypass enabled by default (`"AIBypass": true`) to preserve tokens and eliminate transcript clutter across automated agents and CI/CD pipelines.
+  - Can be toggled on or off directly via `phantom-config aibypass on|off` or by modifying `config.json`.
+- **VS Code Integrated Terminal Animation Control (`AllowVSCodeAnimations`)**:
+  - Animations are allowed in VS Code integrated terminals by default (`"AllowVSCodeAnimations": true`), while automated tools and background agents remain silenced.
+  - Configurable via `phantom-config vscode on|off` or in `config.json`.
+- **Configurable Stealth Mode Path Cloaking (`StealthMaskPath`)**:
+  - Real directory path is now displayed by default in stealth mode (e.g. `Hp@D:\Projects\Coding`), preserving full shell awareness while masking identity.
+  - Users can enable full path obfuscation (`ghost@~/phantom/core/grid`) by setting `"StealthMaskPath": true` or toggling `phantom-config maskpath on|off`.
+- **Interactive Configuration Management CLI & Box HUD (`phantom-config` / `unknown-config`)**:
+  - Brand-new formatted 66-column configuration HUD displaying live ON/OFF status for all settings.
+  - Added direct command-line toggle setters: `phantom-config [setting] on|off` (e.g., `aibypass`, `maskpath`, `vscode`, `animation`, `live`, `bars`, `fullpath`, `suggestions`).
+  - Added `-Reset` (`--reset`) to revert configuration to factory defaults, and `-Edit` (`--edit`) to open config in system editor.
+- **Dedicated Release Documentation**: Created crisp, terminal-friendly changelog at `docs/changelogs/v4.2.1.md`.
+
+### Fixed
+- **Title Box Border Alignment**:
+  - Standardized inner width calculation in `Show-Dashboard` (`PhantomStartup.ps1`) and `show_dashboard` (`PhantomStartup.sh`), fixing a 2-column right border gap and achieving flush 66-column closed borders.
+- **Interactive Upgrade Changelog Modal**:
+  - Post-update celebration modal now pauses and prompts `Press any key to continue...`, waiting for user keypress instead of disappearing prematurely.
+  - Celebration modal is now strictly restricted to upgrading users with an older `LastSeenVersion`, completely skipping fresh installations.
+
+### Changed
+- Bumped project version to **4.2.1** across PowerShell and Bash engines, installers, tests, documentation, and release manifests.
+- Preserved `AIBypass`, `AllowVSCodeAnimations`, and `StealthMaskPath` across installer upgrades.
+
+---
+
 ## [4.1.0 "Krypton"] - 2026-10-18
 
 ### Added
@@ -465,6 +496,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[4.2.1]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v4.2.1
 [4.1.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v4.1.0
 [4.0.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v4.0.0
 [3.7.0]: https://github.com/Unknown-2829/Phantom-terminal/releases/tag/v3.7.0

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phantom Terminal v4.1.0 - Rigorous Bash Engine Test Suite
+# Phantom Terminal v4.2.1 - Rigorous Bash Engine Test Suite
 set -u
 
 PASS_COUNT=0
@@ -19,7 +19,7 @@ assert_test() {
 }
 
 echo ""
-echo "=== Testing Phantom Terminal Bash v4.1.0 Engine ==="
+echo "=== Testing Phantom Terminal Bash v4.2.1 Engine ==="
 echo ""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")/.." && pwd)"
@@ -268,7 +268,7 @@ cp "$SCRIPT_DIR/PhantomStartup.sh" "$SANDBOX_DIR/repo/PhantomStartup.sh"
 exit_valid=$?
 
 promoted_valid=false
-if grep -q 'SCRIPT_VERSION="4.1.0"' "$ACTIVE_ENGINE" 2>/dev/null; then
+if grep -q 'SCRIPT_VERSION="4.2.1"' "$ACTIVE_ENGINE" 2>/dev/null; then
     promoted_valid=true
 fi
 profile_configured=false
@@ -291,7 +291,7 @@ sed -i.bak 's|^REPO_URL=.*|REPO_URL="http://127.0.0.1:9"|' "$SANDBOX_DIR/repo_re
 exit_remote_fail=$?
 
 remote_preserved=false
-if grep -q 'SCRIPT_VERSION="4.1.0"' "$ACTIVE_ENGINE" 2>/dev/null; then
+if grep -q 'SCRIPT_VERSION="4.2.1"' "$ACTIVE_ENGINE" 2>/dev/null; then
     remote_preserved=true
 fi
 

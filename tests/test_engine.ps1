@@ -1,4 +1,4 @@
-# Phantom Terminal v4.1.0 - Rigorous PowerShell Engine Test Suite
+# Phantom Terminal v4.2.1 - Rigorous PowerShell Engine Test Suite
 $ErrorActionPreference = "Stop"
 
 $PassCount = 0
@@ -19,7 +19,7 @@ function Assert-Test {
     }
 }
 
-Write-Host "`n=== Testing Phantom Terminal PowerShell v4.1.0 Engine ===`n" -ForegroundColor Cyan
+Write-Host "`n=== Testing Phantom Terminal PowerShell v4.2.1 Engine ===`n" -ForegroundColor Cyan
 
 # Test 1: Syntax / AST Parsing
 $scripts = @("PhantomStartup.ps1", "install.ps1", "tests\test_engine.ps1")
@@ -242,7 +242,7 @@ try {
     $env:CI = $origCI
 }
 
-$enginePromoted = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.1\.0"'
+$enginePromoted = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.2\.1"'
 $profileConfigured = (Get-Content $fakeProfile -Raw -ErrorAction SilentlyContinue) -match "Phantom Terminal START"
 
 Assert-Test -Name "Installer Integrity: Real installer validates and atomically promotes valid payload" -Condition ($installSuccess -and $enginePromoted -and $profileConfigured)
@@ -270,7 +270,7 @@ try {
     $env:CI = $origCI
 }
 
-$engineIntactAfterRemoteFail = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.1\.0"'
+$engineIntactAfterRemoteFail = (Get-Content $activeEngine -Raw -ErrorAction SilentlyContinue) -match '\$Script:Version\s*=\s*"4\.2\.1"'
 Assert-Test -Name "Installer Integrity: Real installer fails closed on remote manifest/network failure" -Condition ($remoteFailedClosed -and $engineIntactAfterRemoteFail)
 
 # Test 10: Unknown-Terminal Peer Parity and Codename Krypton

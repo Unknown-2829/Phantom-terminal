@@ -1,18 +1,18 @@
-<#
+﻿<#
 .SYNOPSIS
-    Phantom Terminal - Fast Native Installer v4.1.0
+    Phantom Terminal - Fast Native Installer v4.2.1
 .DESCRIPTION
     High-performance installer with robust config persistence and profile safety.
-    Run: irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.1.0/install.ps1 | iex
+    Run: irm https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/v4.2.1/install.ps1 | iex
 #>
 
 # Fast init
 $ErrorActionPreference = "Stop"
-$InstallVersion = "4.1.0"
+$InstallVersion = "4.2.1"
 $InstallCodename = "Krypton"
 $ReleaseTag = "v$InstallVersion"
 $RepoUrl = "https://raw.githubusercontent.com/Unknown-2829/Phantom-terminal/$ReleaseTag"
-$ExpectedSha256 = "e0888184afc9681ff41690ff87a1057f5a84266044746d51d06c3c893faa29e8"
+$ExpectedSha256 = "3fb33deccb5143d8801e1819b8c7d708a9153616e885fa1fc3a5daba7e4ba9cb"
 $UserHome = if ($env:PHANTOM_HOME) { $env:PHANTOM_HOME } elseif ($env:UNKNOWN_HOME) { $env:UNKNOWN_HOME } elseif ($HOME) { $HOME } elseif ($env:USERPROFILE) { $env:USERPROFILE } else { [Environment]::GetFolderPath('UserProfile') }
 $ConfigDir = Join-Path $UserHome ".phantom-terminal"
 $InstallPath = Join-Path $ConfigDir "PhantomStartup.ps1"
@@ -58,16 +58,19 @@ function Remove-PhantomProfileEntries {
 
 # Fast config load
 $cfg = @{
-    Theme = "Phantom"
-    MatrixMode = "Letters"
-    ShowFullPath = $true
-    GradientText = $true
-    AutoCheckUpdates = $true
-    ShowSystemInfo = $true
-    SmartSuggestions = $true
-    StealthMode = $false
-    LiveStats = $false
-    ShowUsageBars = $true
+    Theme                 = "Phantom"
+    MatrixMode            = "Letters"
+    ShowFullPath          = $true
+    GradientText          = $true
+    AutoCheckUpdates      = $true
+    ShowSystemInfo        = $true
+    SmartSuggestions      = $true
+    StealthMode           = $false
+    StealthMaskPath       = $false
+    AIBypass              = $true
+    AllowVSCodeAnimations = $true
+    LiveStats             = $false
+    ShowUsageBars         = $true
 }
 
 if (Test-Path $ConfigFile) {
@@ -81,6 +84,9 @@ if (Test-Path $ConfigFile) {
         if ($null -ne $json.ShowSystemInfo) { $cfg.ShowSystemInfo = [bool]$json.ShowSystemInfo }
         if ($null -ne $json.SmartSuggestions) { $cfg.SmartSuggestions = [bool]$json.SmartSuggestions }
         if ($null -ne $json.StealthMode) { $cfg.StealthMode = [bool]$json.StealthMode }
+        if ($null -ne $json.StealthMaskPath) { $cfg.StealthMaskPath = [bool]$json.StealthMaskPath }
+        if ($null -ne $json.AIBypass) { $cfg.AIBypass = [bool]$json.AIBypass }
+        if ($null -ne $json.AllowVSCodeAnimations) { $cfg.AllowVSCodeAnimations = [bool]$json.AllowVSCodeAnimations }
         if ($null -ne $json.LiveStats) { $cfg.LiveStats = [bool]$json.LiveStats }
         if ($null -ne $json.ShowUsageBars) { $cfg.ShowUsageBars = [bool]$json.ShowUsageBars }
     } catch {}
@@ -313,25 +319,42 @@ if (Test-Path "$InstallPath") {
     # Config
     Write-Host "  $Cyan$b_44 $White Saving Config...$R"
     $config = [ordered]@{
-        AnimationEnabled  = $true
-        MatrixDuration    = 2
-        MatrixMode        = $MatrixMode
-        SecurityLoadSteps = 8
-        GlitchIntensity   = 3
-        ShowSystemInfo    = $ShowSystemInfo
-        ShowFullPath      = $ShowFullPath
-        GradientText      = $GradientText
-        SmartSuggestions  = $SmartSuggestions
-        Theme             = $Theme
-        AutoCheckUpdates  = $AutoUpdate
-        SilentUpdate      = $false
-        UpdateCheckDays   = 1
-        StealthMode       = $cfg.StealthMode
-        LiveStats         = $cfg.LiveStats
-        ShowUsageBars     = $cfg.ShowUsageBars
+        AnimationEnabled      = $true
+        MatrixDuration        = 2
+        MatrixMode            = $MatrixMode
+        SecurityLoadSteps     = 8
+        GlitchIntensity       = 3
+        ShowSystemInfo        = $ShowSystemInfo
+        ShowFullPath          = $ShowFullPath
+        GradientText          = $GradientText
+        SmartSuggestions      = $SmartSuggestions
+        Theme                 = $Theme
+        AutoCheckUpdates      = $AutoUpdate
+        SilentUpdate          = $false
+        UpdateCheckDays       = 1
+        StealthMode           = $cfg.StealthMode
+        StealthMaskPath       = $cfg.StealthMaskPath
+        AIBypass              = $cfg.AIBypass
+        AllowVSCodeAnimations = $cfg.AllowVSCodeAnimations
+        LiveStats             = $cfg.LiveStats
+        ShowUsageBars         = $cfg.ShowUsageBars
     }
     $config | ConvertTo-Json -Depth 3 | Out-File $ConfigFile -Encoding UTF8 -Force
     Write-Host "  $Green$b_plus Config saved to $ConfigFile$R"
+
+    # Initialize cache for fresh installs (so upgrade modal is NOT shown on new installs)
+    $cacheFile = Join-Path $ConfigDir "cache.json"
+    if (-not (Test-Path $cacheFile)) {
+        $nowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        $initCache = [ordered]@{
+            LastUpdateCheck  = $nowEpoch
+            LatestVersion    = $InstallVersion
+            UpdateAvailable  = $false
+            UpdateDownloaded = $false
+            LastSeenVersion  = $InstallVersion
+        }
+        $initCache | ConvertTo-Json | Out-File $cacheFile -Encoding UTF8 -Force
+    }
 
     Write-Host ""
     $cTitle = "INSTALLATION COMPLETE! (v$InstallVersion `"$InstallCodename`")"

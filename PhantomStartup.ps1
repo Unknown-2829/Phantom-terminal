@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-    Phantom Terminal - Advanced Native PowerShell Startup System v4.1.0
+    Phantom Terminal - Advanced Native PowerShell Startup System v4.2.1
 .DESCRIPTION
     Pure Native Shell cinematic startup, interactive cyber dashboard, live telemetry,
     smart history prediction, cyberpunk privacy spoofing, and AI agent guard.
@@ -8,14 +8,14 @@
 .NOTES
     Creator: @unknownlll2829 (Telegram)
     GitHub:  https://github.com/Unknown-2829/Phantom-terminal
-    Version: 4.1.0
+    Version: 4.2.1
 #>
 
 # ═══════════════════════════════════════════════════════════════════════════
 # VERSION & PATHS
 # ═══════════════════════════════════════════════════════════════════════════
 
-$Script:Version = "4.1.0"
+$Script:Version = "4.2.1"
 $Script:Codename = "Krypton"
 $Script:FullVersion = "v$Script:Version `"$Script:Codename`""
 $Script:RepoOwner = "Unknown-2829"
@@ -46,12 +46,35 @@ function Test-PhantomAgentGuard {
     if ($env:PHANTOM_FORCE -eq "1" -or $env:UNKNOWN_FORCE -eq "1") { return $false }
     if ($env:PHANTOM_QUIET -eq "1" -or $env:UNKNOWN_QUIET -eq "1") { return $true }
 
-    # Check known CI / Agent environment variables
-    if ($env:CI -or $env:GITHUB_ACTIONS -or $env:TF_BUILD -or $env:GITLAB_CI -or
-        $env:CURSOR_AGENT -or $env:CLAUDE_AGENT -or $env:AGENT_ENV -or $env:VSCODE_INJECTION -or
-        $env:DEBIAN_FRONTEND -eq "noninteractive") {
+    # VS Code Terminal Control (allowed by default)
+    $isVSCode = ($env:TERM_PROGRAM -eq "vscode" -or $env:VSCODE_INJECTION -or $env:VSCODE_GIT_IPC_HANDLE)
+    $allowVSCode = $true
+    if ($Script:Config -and $null -ne $Script:Config.AllowVSCodeAnimations) {
+        $allowVSCode = [bool]$Script:Config.AllowVSCodeAnimations
+    } elseif ($Script:Config -and $Script:Config.EnvironmentControl -and $null -ne $Script:Config.EnvironmentControl.VSCode) {
+        $allowVSCode = [bool]$Script:Config.EnvironmentControl.VSCode
+    }
+    if ($isVSCode -and $allowVSCode) { return $false }
+
+    # AI Bypass setting (default: true - auto-bypass in agents/CI to preserve tokens)
+    $aiBypass = $true
+    if ($Script:Config -and $null -ne $Script:Config.AIBypass) {
+        $aiBypass = [bool]$Script:Config.AIBypass
+    }
+    if (-not $aiBypass) { return $false }
+
+    # Granular Environment / Agent checks (active only when AIBypass is enabled)
+    $envCtrl = if ($Script:Config -and $Script:Config.EnvironmentControl) { $Script:Config.EnvironmentControl } else { @{} }
+    $allowCI = if ($null -ne $envCtrl.CI) { [bool]$envCtrl.CI } else { $false }
+    if (-not $allowCI -and ($env:CI -or $env:GITHUB_ACTIONS -or $env:TF_BUILD -or $env:GITLAB_CI -or $env:DEBIAN_FRONTEND -eq "noninteractive")) {
         return $true
     }
+
+    $allowClaude = if ($null -ne $envCtrl.ClaudeAgent) { [bool]$envCtrl.ClaudeAgent } else { $false }
+    if (-not $allowClaude -and $env:CLAUDE_AGENT) { return $true }
+
+    $allowCursor = if ($null -ne $envCtrl.CursorAgent) { [bool]$envCtrl.CursorAgent } else { $false }
+    if (-not $allowCursor -and ($env:CURSOR_AGENT -or $env:AGENT_ENV)) { return $true }
 
     # Check stream redirection
     try {
@@ -90,6 +113,18 @@ $Script:DefaultConfig = @{
 
     # Privacy & Stealth
     StealthMode        = $false       # Cyberpunk OS/CPU/Host spoofing
+    StealthMaskPath    = $false       # Hide directory path in stealth mode (default: false, shows real path)
+
+    # AI & Environment Controls
+    AIBypass              = $true     # Auto-bypass animations in AI agents/CI (default: true)
+    AllowVSCodeAnimations = $true     # Allow startup animations in VS Code terminal (default: true)
+    EnvironmentControl    = @{
+        VSCode          = $true
+        WindowsTerminal = $true
+        ClaudeAgent     = $false
+        CursorAgent     = $false
+        CI              = $false
+    }
 
     # Smart Suggestions & Search
     SmartSuggestions   = $true        # Zero-dep fuzzy history search + PSReadLine if available
@@ -148,7 +183,7 @@ $Script:Themes = @{
         MatrixChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$'
         Operators = @("Ghost", "Cipher", "Spectre", "Valkyrie", "Null", "Ronin", "Phantom-0")
         Hosts     = @("NEO-TOKYO-GRID", "SHADOW-NET-CORE", "ORBITAL-STATION-7", "BLACK-ICE-NODE", "NEURAL-MATRIX-01", "PHANTOM-GATEWAY")
-        Systems   = @("Phantom OS v4.1.0 (Quantum Microkernel)", "Phantom Neural Core v4.1.0 (Sub-atomic)", "Phantom Mesh OS v4.1.0 (Encrypted)", "Phantom Quantum Kernel v4.1.0 (Ring-0)")
+        Systems   = @("Phantom OS v$($Script:Version) (Quantum Microkernel)", "Phantom Neural Core v$($Script:Version) (Sub-atomic)", "Phantom Mesh OS v$($Script:Version) (Encrypted)", "Phantom Quantum Kernel v$($Script:Version) (Ring-0)")
         Uptimes   = @("∞ (Untraceable)", "99.999% (Cloaked)", "Sub-atomic Flux (Active)", "Quantum Loop (Shielded)")
     }
     Unknown = @{
@@ -191,7 +226,7 @@ $Script:Themes = @{
         MatrixChars = 'UNKNOWN01?_-=+[]{}|;:,./'
         Operators = @("Anonymous", "Unknown-2829", "Root-Null", "Operator-X", "Enigma", "Cipher-2829", "Shadow-Ghost")
         Hosts     = @("DARKNET-GATEWAY", "ANONYMOUS-NODE-X", "NULL-SECTOR-404", "CIPHER-GRID-2829", "SHADOW-RELAY-0", "VOID-MATRIX-2829")
-        Systems   = @("Unknown Kernel v4.1.0 (Zero Footprint)", "Unknown Mesh OS v4.1.0 (Dark-Routing)", "Unknown Void Subsystem v4.1.0", "Unknown Protocol v4.1.0 (Ephemeral)")
+        Systems   = @("Unknown Kernel v$($Script:Version) (Zero Footprint)", "Unknown Mesh OS v$($Script:Version) (Dark-Routing)", "Unknown Void Subsystem v$($Script:Version)", "Unknown Protocol v$($Script:Version) (Ephemeral)")
         Uptimes   = @("Redacted (Zero-Log)", "Hidden Route (Active)", "Ephemeral Loop (Active)", "Zero-Trace (Cloaked)")
     }
 }
@@ -217,6 +252,18 @@ function Get-PhantomConfig {
             if ($null -ne $json.ShowFullPath)     { $config.ShowFullPath = [bool]$json.ShowFullPath }
             if ($null -ne $json.GradientText)     { $config.GradientText = [bool]$json.GradientText }
             if ($null -ne $json.StealthMode)      { $config.StealthMode = [bool]$json.StealthMode }
+            if ($null -ne $json.StealthMaskPath)       { $config.StealthMaskPath = [bool]$json.StealthMaskPath }
+            if ($null -ne $json.AIBypass)              { $config.AIBypass = [bool]$json.AIBypass }
+            if ($null -ne $json.AllowVSCodeAnimations) { $config.AllowVSCodeAnimations = [bool]$json.AllowVSCodeAnimations }
+            if ($null -ne $json.EnvironmentControl) {
+                $config.EnvironmentControl = @{
+                    VSCode          = if ($null -ne $json.EnvironmentControl.VSCode) { [bool]$json.EnvironmentControl.VSCode } else { $true }
+                    WindowsTerminal = if ($null -ne $json.EnvironmentControl.WindowsTerminal) { [bool]$json.EnvironmentControl.WindowsTerminal } else { $true }
+                    ClaudeAgent     = if ($null -ne $json.EnvironmentControl.ClaudeAgent) { [bool]$json.EnvironmentControl.ClaudeAgent } else { $false }
+                    CursorAgent     = if ($null -ne $json.EnvironmentControl.CursorAgent) { [bool]$json.EnvironmentControl.CursorAgent } else { $false }
+                    CI              = if ($null -ne $json.EnvironmentControl.CI) { [bool]$json.EnvironmentControl.CI } else { $false }
+                }
+            }
             if ($null -ne $json.LiveStats)        { $config.LiveStats = [bool]$json.LiveStats }
             if ($null -ne $json.SmartSuggestions) { $config.SmartSuggestions = [bool]$json.SmartSuggestions }
             if ($json.Theme)                      { $config.Theme = [string]$json.Theme }
@@ -768,7 +815,7 @@ function Get-SystemMetrics {
         if (-not $theme) { $theme = $Script:Themes["Phantom"] }
         if ($theme.Operators) { $specs.Operator = Get-Random -InputObject $theme.Operators } else { $specs.Operator = "Ghost" }
         if ($theme.Hosts)     { $specs.Host     = Get-Random -InputObject $theme.Hosts } else { $specs.Host = "NEO-TOKYO-GRID" }
-        if ($theme.Systems)   { $specs.System   = Get-Random -InputObject $theme.Systems } else { $specs.System = "Phantom OS v4.1.0 (Quantum Microkernel)" }
+        if ($theme.Systems)   { $specs.System   = Get-Random -InputObject $theme.Systems } else { $specs.System = "Phantom OS v$($Script:Version) (Quantum Microkernel)" }
         if ($theme.Uptimes)   { $specs.Uptime   = Get-Random -InputObject $theme.Uptimes } else { $specs.Uptime = "∞ (Untraceable)" }
         $specs.CPU      = Get-Random -Minimum 8 -Maximum 16
         $specs.RAM      = Get-Random -Minimum 12 -Maximum 22
@@ -840,12 +887,12 @@ function Show-Dashboard {
 
     # Title Row
     $titleText = "$($Script:CurrentTheme.Title) v$Script:Version `"$Script:Codename`""
-    $skullVisual = 2
-    $titleVisual = ($skullVisual + 2) + $titleText.Length + (2 + $skullVisual)
-    $titlePad = [Math]::Max(0, $inner - $titleVisual)
+    $skull = $Script:Symbols.Skull
+    $fullTitle = "$skull  $titleText  $skull"
+    $titlePad = [Math]::Max(0, $inner - $fullTitle.Length)
     $halfLeft = [Math]::Floor($titlePad / 2)
     $halfRight = $titlePad - $halfLeft
-    Write-Host "$indent$primary$($Script:Symbols.VLine)$(' ' * $halfLeft)$secondary$($Script:Symbols.Skull)  $titleText  $($Script:Symbols.Skull)$primary$(' ' * $halfRight)$($Script:Symbols.VLine)$($Script:Colors.Reset)"
+    Write-Host "$indent$primary$($Script:Symbols.VLine)$(' ' * $halfLeft)$secondary$skull  $titleText  $skull$primary$(' ' * $halfRight)$($Script:Symbols.VLine)$($Script:Colors.Reset)"
 
     Write-Host "$indent$primary$($Script:Symbols.TLeft)$hLine$($Script:Symbols.TRight)$($Script:Colors.Reset)"
 
@@ -1141,15 +1188,6 @@ function Show-UpdateCelebrationModal {
     Write-Host ""
     Write-Host "$indent$($Script:Colors.NeonGreen)  $($Script:CurrentTheme.Title) v$Script:Version `"$Script:Codename`" is now online!$($Script:Colors.Reset)"
     Write-Host ""
-    Write-Host "$indent$($Script:Colors.White)  Highlights in v$Script:Version :$($Script:Colors.Reset)"
-    Write-Host "$indent$($Script:Colors.NeonCyan)  [+] Zero Dependencies:$($Script:Colors.Gray) 100% Native Shell (Zero Python/pip/jq)"
-    Write-Host "$indent$($Script:Colors.NeonCyan)  [+] Instant Keypress Skip:$($Script:Colors.Gray) Smooth launch on Spacebar or Enter"
-    Write-Host "$indent$($Script:Colors.NeonCyan)  [+] Precision 66-Column Box:$($Script:Colors.Gray) Unified alignment & closed borders"
-    Write-Host "$indent$($Script:Colors.NeonCyan)  [+] Live Telemetry:$($Script:Colors.Gray) Real-time hardware HUD ($prefix-top / $prefix-dash -Live)"
-    Write-Host "$indent$($Script:Colors.NeonCyan)  [+] Cyberpunk Stealth Mode:$($Script:Colors.Gray) Identity & system cloaking ($prefix-stealth)"
-    Write-Host ""
-    Write-Host "$indent$($Script:Colors.DarkGray)  Type '$($Script:Colors.Gold)$prefix-help$($Script:Colors.DarkGray)' or '$($Script:Colors.Gold)$prefix-changelog$($Script:Colors.DarkGray)' to explore.$($Script:Colors.Reset)"
-    Write-Host ""
 
     # Check for changelog markdown file
     $changelogFile = Join-Path $Script:ConfigDir "latest_changelog.md"
@@ -1157,46 +1195,65 @@ function Show-UpdateCelebrationModal {
         $candidate = Join-Path $PSScriptRoot "docs\changelogs\v$Script:Version.md"
         if (Test-Path $candidate) { $changelogFile = $candidate }
     }
+    $bSym = [char]0x2022
     if (Test-Path $changelogFile) {
         try {
-            $cl = Get-Content $changelogFile -Raw -ErrorAction SilentlyContinue
-            if ($cl) {
-                Write-Host "$indent$($Script:Colors.Gold)Changelog Highlights:$($Script:Colors.Reset)"
-                $lines = $cl -split "`r?`n" | Where-Object { $_ -and -not ($_.StartsWith('#')) } | Select-Object -First 6
-                foreach ($ln in $lines) {
-                    if ($ln.Trim()) { Write-Host "$indent  $($Script:Colors.Gray)$($ln.Trim())" }
+            $rawLines = Get-Content $changelogFile -ErrorAction SilentlyContinue
+            if ($rawLines) {
+                Write-Host "$indent$($Script:Colors.Gold)  Changelog Highlights (v$Script:Version):$($Script:Colors.Reset)"
+                foreach ($ln in $rawLines) {
+                    $trim = $ln.Trim()
+                    if ($trim.StartsWith("- ") -or $trim.StartsWith("* ")) {
+                        $bullet = $trim.Substring(2).Trim()
+                        if ($bullet -match '^\*\*(.+?)\*\*:\s*(.*)$') {
+                            Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) $($Matches[1]):$($Script:Colors.Gray) $($Matches[2])$($Script:Colors.Reset)"
+                        } else {
+                            Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.Gray) $bullet$($Script:Colors.Reset)"
+                        }
+                    }
                 }
                 Write-Host ""
             }
         } catch {}
+    } else {
+        Write-Host "$indent$($Script:Colors.Gold)  Changelog Highlights (v$Script:Version):$($Script:Colors.Reset)"
+        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Theme-Matched Telemetry:$($Script:Colors.Gray) Operator, Host, Kernel rotate per session$($Script:Colors.Reset)"
+        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Precision Box Alignment:$($Script:Colors.Gray) Standardized labels & 66-column closed borders$($Script:Colors.Reset)"
+        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Dynamic Centering:$($Script:Colors.Gray) Mathematically centered installer boxes$($Script:Colors.Reset)"
+        Write-Host "$indent  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) Double-Spaced Prompt:$($Script:Colors.Gray) Clean status breathing room$($Script:Colors.Reset)"
+        Write-Host ""
     }
 
-    # Smooth pause with keypress skip
-    for ($k = 0; $k -lt 12; $k++) {
-        Start-Sleep -Milliseconds 100
-        try {
-            if ([Console]::KeyAvailable) {
-                [void][Console]::ReadKey($true)
-                break
-            }
-        } catch {}
+    Write-Host "$indent$($Script:Colors.DarkGray)  Type '$($Script:Colors.Gold)$prefix-help$($Script:Colors.DarkGray)' or '$($Script:Colors.Gold)$prefix-changelog$($Script:Colors.DarkGray)' to explore.$($Script:Colors.Reset)"
+    Write-Host ""
+    Write-Host "$indent$($Script:Colors.NeonGreen)  Press any key to continue...$($Script:Colors.Reset)" -NoNewline
+
+    try {
+        if (-not [Console]::IsInputRedirected) {
+            while ([Console]::KeyAvailable) { [void][Console]::ReadKey($true) }
+            [void][Console]::ReadKey($true)
+        }
+    } catch {
+        Start-Sleep -Milliseconds 800
     }
+    Write-Host ""
 }
 
 function Start-PhantomTerminal {
     param([switch]$Force)
     # If running inside an AI Agent, CI, or quiet mode: instant silent bypass
-    if ($Script:IsAgentSession -and -not $Force) { return }
+    $isAgent = Test-PhantomAgentGuard
+    if ($isAgent -and -not $Force) { return }
 
-    # Post-Update Celebration & Changelog Modal
+    # Post-Update Celebration & Changelog Modal (Only for existing users upgrading from an older version)
     $cache = Get-PhantomCache
-    if ($null -eq $cache.LastSeenVersion -or (Test-PhantomVersionGreater $Script:Version $cache.LastSeenVersion)) {
+    if (-not [string]::IsNullOrEmpty($cache.LastSeenVersion) -and (Test-PhantomVersionGreater $Script:Version $cache.LastSeenVersion)) {
         Show-UpdateCelebrationModal -OldVersion $cache.LastSeenVersion
-        $cache.LastSeenVersion = $Script:Version
-        $cache.UpdateDownloaded = $false
-        $cache.UpdateAvailable = $false
-        Save-PhantomCache -Cache $cache
     }
+    $cache.LastSeenVersion = $Script:Version
+    $cache.UpdateDownloaded = $false
+    $cache.UpdateAvailable = $false
+    Save-PhantomCache -Cache $cache
 
     # Nested subshell detection: skip replay inside child subshells
     if (($env:PHANTOM_SESSION_ACTIVE -or $env:UNKNOWN_SESSION_ACTIVE) -and -not $Force) {
@@ -1289,7 +1346,7 @@ function Set-PhantomPrompt {
         $lastSuccess = $?
 
         # Path resolution
-        if ($Script:Config.StealthMode) {
+        if ($Script:Config.StealthMode -and $Script:Config.StealthMaskPath) {
             $pathDisplay = if ($Script:Config.Theme -eq "Unknown") { "~/unknown/darknet/grid" } else { "~/phantom/core/grid" }
         } elseif ($Script:Config.ShowFullPath) {
             $pathDisplay = (Get-Location).Path
@@ -1439,19 +1496,27 @@ function global:phantom-changelog {
         $candidate = Join-Path $PSScriptRoot "docs\changelogs\v$Script:Version.md"
         if (Test-Path $candidate) { $changelogFile = $candidate }
     }
+    $titleBranding = if ($Script:CurrentTheme.Name -eq "Unknown") { "Unknown Terminal" } else { "Phantom Terminal" }
+    $bSym = [char]0x2022
     if (Test-Path $changelogFile) {
-        Write-Host "`n$($Script:Colors.NeonCyan)=== Phantom Terminal v$Script:Version Changelog ===$($Script:Colors.Reset)`n"
+        Write-Host "`n$($Script:Colors.NeonCyan)=== $titleBranding v$Script:Version Changelog ===$($Script:Colors.Reset)`n"
         Get-Content $changelogFile | ForEach-Object {
-            if ($_.StartsWith('# ')) {
-                Write-Host "$($Script:Colors.Gold)$($_)$($Script:Colors.Reset)"
-            } elseif ($_.StartsWith('## ')) {
-                Write-Host "`n$($Script:Colors.NeonGreen)$($_)$($Script:Colors.Reset)"
-            } elseif ($_.StartsWith('### ')) {
-                Write-Host "$($Script:Colors.White)$($_)$($Script:Colors.Reset)"
-            } elseif ($_.StartsWith('- ') -or $_.StartsWith('* ')) {
-                Write-Host "  $($Script:Colors.NeonCyan)•$($Script:Colors.Gray) $($_.Substring(2))$($Script:Colors.Reset)"
-            } else {
-                Write-Host "$($Script:Colors.DarkGray)$($_)$($Script:Colors.Reset)"
+            $trim = $_.Trim()
+            if ($trim.StartsWith('# ')) {
+                Write-Host "$($Script:Colors.Gold)$trim$($Script:Colors.Reset)"
+            } elseif ($trim.StartsWith('## ')) {
+                Write-Host "`n$($Script:Colors.NeonGreen)$trim$($Script:Colors.Reset)"
+            } elseif ($trim.StartsWith('### ')) {
+                Write-Host "$($Script:Colors.White)$trim$($Script:Colors.Reset)"
+            } elseif ($trim.StartsWith('- ') -or $trim.StartsWith('* ')) {
+                $bullet = $trim.Substring(2).Trim()
+                if ($bullet -match '^\*\*(.+?)\*\*:\s*(.*)$') {
+                    Write-Host "  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.White) $($Matches[1]):$($Script:Colors.Gray) $($Matches[2])$($Script:Colors.Reset)"
+                } else {
+                    Write-Host "  $($Script:Colors.NeonCyan)$bSym$($Script:Colors.Gray) $bullet$($Script:Colors.Reset)"
+                }
+            } elseif ($trim) {
+                Write-Host "$($Script:Colors.DarkGray)$trim$($Script:Colors.Reset)"
             }
         }
         Write-Host ""
@@ -1514,22 +1579,122 @@ function global:unknown-top     { Start-PhantomLiveMonitor }
 function global:unknown-live    { Start-PhantomLiveMonitor }
 function global:unknown-update  { Update-PhantomTerminal }
 function global:unknown-stealth { param([string]$Action) phantom-stealth $Action }
-function global:unknown-config  { param([switch]$Edit) if ($Edit) { notepad $Script:ConfigFile } else { phantom-config } }
+function global:unknown-config  { param([string]$Key, [string]$Value, [switch]$Edit, [switch]$Reset) phantom-config -Key $Key -Value $Value -Edit:$Edit -Reset:$Reset }
 function global:unknown-chosen  { phantom-chosen }
 function global:unknown-2829    { phantom-2829 }
 function global:unknown-secrets { phantom-secrets }
 
 function global:phantom-config {
-    param([switch]$Edit)
+    param(
+        [string]$Key,
+        [string]$Value,
+        [switch]$Edit,
+        [switch]$Reset
+    )
+
+    $prefix = if ($Script:CurrentTheme.Name -eq "Unknown") { "unknown" } else { "phantom" }
+
     if ($Edit) {
-        notepad $Script:ConfigFile
-    } else {
-        Write-Host "`n$($Script:Colors.NeonCyan)Config: $Script:ConfigFile$($Script:Colors.Reset)`n"
-        $Script:Config.GetEnumerator() | Sort-Object Name | ForEach-Object {
-            Write-Host "  $($Script:Colors.Gold)$($_.Key)$($Script:Colors.White): $($_.Value)$($Script:Colors.Reset)"
+        if ($env:OS -like "*Windows*") {
+            Start-Process "notepad.exe" $Script:ConfigFile
+        } else {
+            $editor = if ($env:EDITOR) { $env:EDITOR } else { "nano" }
+            Start-Process $editor -ArgumentList $Script:ConfigFile -Wait
         }
-        Write-Host "`n$($Script:Colors.DarkGray)Run: phantom-config -Edit$($Script:Colors.Reset)`n"
+        return
     }
+
+    if ($Reset) {
+        $Script:Config = $Script:DefaultConfig.Clone()
+        Save-PhantomConfig -Config $Script:Config
+        Write-Host "$($Script:Colors.NeonGreen)[+] Configuration reset to factory defaults.$($Script:Colors.Reset)`n"
+        return
+    }
+
+    # Direct Key / Value setter: e.g. phantom-config aibypass on
+    if ($Key -and $Value) {
+        $kClean = $Key.ToLower()
+        $bVal = ($Value -in @("on", "true", "1", "yes", "enable"))
+
+        if ($kClean -in @("aibypass", "ai", "bypass", "agentguard")) {
+            $Script:Config.AIBypass = $bVal
+            Save-PhantomConfig -Config $Script:Config
+            $status = if ($bVal) { "$($Script:Colors.NeonGreen)ENABLED$($Script:Colors.Reset)" } else { "$($Script:Colors.DarkGray)DISABLED$($Script:Colors.Reset)" }
+            Write-Host "$($Script:Colors.NeonCyan)[*] AI Agent Bypass is now $status."
+            return
+        }
+        if ($kClean -in @("stealthmaskpath", "maskpath", "hidepath", "cloakpath")) {
+            $Script:Config.StealthMaskPath = $bVal
+            Save-PhantomConfig -Config $Script:Config
+            $status = if ($bVal) { "$($Script:Colors.NeonGreen)ENABLED (Path hidden in stealth)$($Script:Colors.Reset)" } else { "$($Script:Colors.DarkGray)DISABLED (Real path shown)$($Script:Colors.Reset)" }
+            Write-Host "$($Script:Colors.NeonCyan)[*] Stealth Path Masking is now $status."
+            return
+        }
+        if ($kClean -in @("allowvscodeanimations", "vscode", "vscodeanimations")) {
+            $Script:Config.AllowVSCodeAnimations = $bVal
+            if (-not $Script:Config.EnvironmentControl) { $Script:Config.EnvironmentControl = @{} }
+            $Script:Config.EnvironmentControl.VSCode = $bVal
+            Save-PhantomConfig -Config $Script:Config
+            $status = if ($bVal) { "$($Script:Colors.NeonGreen)ALLOWED$($Script:Colors.Reset)" } else { "$($Script:Colors.DarkGray)BLOCKED$($Script:Colors.Reset)" }
+            Write-Host "$($Script:Colors.NeonCyan)[*] VS Code animations are now $status."
+            return
+        }
+        if ($kClean -in @("animation", "animationenabled")) {
+            $Script:Config.AnimationEnabled = $bVal
+            Save-PhantomConfig -Config $Script:Config
+            Write-Host "$($Script:Colors.NeonCyan)[*] Startup animations set to $bVal."
+            return
+        }
+        if ($kClean -in @("livestats", "live")) {
+            $Script:Config.LiveStats = $bVal
+            Save-PhantomConfig -Config $Script:Config
+            Write-Host "$($Script:Colors.NeonCyan)[*] Live telemetry HUD set to $bVal."
+            return
+        }
+        if ($kClean -in @("showusagebars", "usagebars", "bars")) {
+            $Script:Config.ShowUsageBars = $bVal
+            Save-PhantomConfig -Config $Script:Config
+            Write-Host "$($Script:Colors.NeonCyan)[*] Usage bars set to $bVal."
+            return
+        }
+        if ($kClean -in @("showfullpath", "fullpath")) {
+            $Script:Config.ShowFullPath = $bVal
+            Save-PhantomConfig -Config $Script:Config
+            Write-Host "$($Script:Colors.NeonCyan)[*] Show full path set to $bVal."
+            return
+        }
+    }
+
+    # Display HUD
+    $onStr  = "$($Script:Colors.NeonGreen)ON $($Script:Colors.Reset)"
+    $offStr = "$($Script:Colors.DarkGray)OFF$($Script:Colors.Reset)"
+
+    Write-Host "`n$($Script:Colors.NeonCyan)╔════════════════════════════════════════════════════════════════╗"
+    Write-Host "║              [=] PHANTOM TERMINAL CONFIGURATION [=]            ║"
+    Write-Host "╠════════════════════════════════════════════════════════════════╣$($Script:Colors.Reset)"
+
+    $items = @(
+        @{ L = "Startup Animations:     "; V = $(if ($Script:Config.AnimationEnabled) { $onStr } else { $offStr }); C = "$prefix-config animation on|off" },
+        @{ L = "Active Theme:           "; V = "$($Script:Colors.Gold)$($Script:Config.Theme)$($Script:Colors.Reset)      "; C = "$prefix-theme Phantom|Unknown" },
+        @{ L = "Stealth Spoofing:       "; V = $(if ($Script:Config.StealthMode) { $onStr } else { $offStr }); C = "$prefix-stealth on|off" },
+        @{ L = "Stealth Mask Path:      "; V = $(if ($Script:Config.StealthMaskPath) { $onStr } else { $offStr }); C = "$prefix-config maskpath on|off" },
+        @{ L = "AI Agent / CI Bypass:   "; V = $(if ($Script:Config.AIBypass) { $onStr } else { $offStr }); C = "$prefix-config aibypass on|off" },
+        @{ L = "VS Code Animations:     "; V = $(if ($Script:Config.AllowVSCodeAnimations) { $onStr } else { $offStr }); C = "$prefix-config vscode on|off" },
+        @{ L = "Live Hardware Telemetry:"; V = $(if ($Script:Config.LiveStats) { $onStr } else { $offStr }); C = "$prefix-config live on|off" },
+        @{ L = "CPU & RAM Usage Bars:   "; V = $(if ($Script:Config.ShowUsageBars) { $onStr } else { $offStr }); C = "$prefix-config bars on|off" },
+        @{ L = "Smart Suggestions:      "; V = $(if ($Script:Config.SmartSuggestions) { $onStr } else { $offStr }); C = "$prefix-config suggestions on|off" },
+        @{ L = "Full Path in Prompt:    "; V = $(if ($Script:Config.ShowFullPath) { $onStr } else { $offStr }); C = "$prefix-config fullpath on|off" }
+    )
+
+    foreach ($it in $items) {
+        Write-Host "$($Script:Colors.NeonPurple)║$($Script:Colors.Reset)  $($Script:Colors.White)$($it.L) $($it.V) $($Script:Colors.DarkGray)$($it.C.PadRight(32))$($Script:Colors.NeonPurple)║$($Script:Colors.Reset)"
+    }
+
+    Write-Host "$($Script:Colors.NeonPurple)╚════════════════════════════════════════════════════════════════╝$($Script:Colors.Reset)"
+    $cGold = $Script:Colors.Gold
+    $cDk = $Script:Colors.DarkGray
+    $cRst = $Script:Colors.Reset
+    Write-Host "`n${cDk}Commands: ${cGold}$prefix-config [setting] on|off ${cDk}| ${cGold}$prefix-config -Edit ${cDk}| ${cGold}$prefix-config -Reset${cRst}`n"
 }
 
 function global:phantom-theme {
@@ -1592,7 +1757,8 @@ function global:phantom-2829 {
     Write-Host (Center "=================") -ForegroundColor DarkMagenta
     Start-Sleep -Milliseconds 400
     Write-Host "`n`n"
-    Write-Host (Center "Created with <3 by") -ForegroundColor DarkGray
+    $credit = 'Created with <3 by'
+    Write-Host (Center $credit) -ForegroundColor DarkGray
     Start-Sleep -Milliseconds 300
     Write-Host "`n"
     Write-Host (Center "UNKNOWN-2829") -ForegroundColor Cyan
@@ -1628,19 +1794,19 @@ function global:phantom-secrets {
 
     $p = if ($Script:CurrentTheme.Name -eq "Unknown") { "unknown" } else { "phantom" }
     if ("chosen" -in $Script:SecretsFound) {
-        Write-Host "  [+] $p-chosen  — The Chosen One" -ForegroundColor Green
+        Write-Host "  [+] $p-chosen  -- The Chosen One" -ForegroundColor Green
     } else {
         Write-Host "  [?] ???" -ForegroundColor DarkGray
     }
 
     if ("2829" -in $Script:SecretsFound) {
-        Write-Host "  [+] $p-2829    — Creator's Mark" -ForegroundColor Green
+        Write-Host "  [+] $p-2829    -- Creator's Mark" -ForegroundColor Green
     } else {
         Write-Host "  [?] ???" -ForegroundColor DarkGray
     }
 
     if ("secrets" -in $Script:SecretsFound) {
-        Write-Host "  [+] $p-secrets — Secret Hunter" -ForegroundColor Green
+        Write-Host "  [+] $p-secrets -- Secret Hunter" -ForegroundColor Green
     } else {
         Write-Host "  [?] ???" -ForegroundColor DarkGray
     }

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Phantom Terminal - Advanced Native Shell Startup System v4.1.0
+# Phantom Terminal - Advanced Native Shell Startup System v4.2.1
 # Cross-platform startup animation, live telemetry, and privacy spoofing
 # Supports: Linux, macOS, Termux (Android)
 # Creator  : @unknownlll2829 (Telegram)
 # GitHub   : https://github.com/Unknown-2829/Phantom-terminal
 #
 
-SCRIPT_VERSION="4.1.0"
+SCRIPT_VERSION="4.2.1"
 SCRIPT_CODENAME="Krypton"
 SCRIPT_FULL_VERSION="v${SCRIPT_VERSION} \"${SCRIPT_CODENAME}\""
 REPO_OWNER="Unknown-2829"
@@ -38,9 +38,28 @@ PLATFORM=$(detect_platform)
 _is_agent_session() {
     [[ "${PHANTOM_FORCE:-}" == "1" || "${UNKNOWN_FORCE:-}" == "1" ]] && return 1
     [[ "${PHANTOM_QUIET:-}" == "1" || "${UNKNOWN_QUIET:-}" == "1" ]] && return 0
+
+    # VS Code terminal animation control (allowed by default for human users)
+    if [[ "${TERM_PROGRAM:-}" == "vscode" || -n "${VSCODE_INJECTION:-}" || -n "${VSCODE_GIT_IPC_HANDLE:-}" ]]; then
+        if [[ "${ALLOW_VSCODE_ANIMATIONS:-true}" == "true" ]]; then
+            if [[ -t 0 && -t 1 && $- == *i* ]]; then
+                return 1
+            fi
+        else
+            return 0
+        fi
+    fi
+
+    # Configurable AI Agent Bypass (silent for agents to preserve tokens & reduce clutter)
+    if [[ "${AI_BYPASS:-true}" != "true" ]]; then
+        [[ ! -t 0 || ! -t 1 ]] && return 0
+        [[ $- != *i* ]] && return 0
+        return 1
+    fi
+
     [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" || -n "${TF_BUILD:-}" || \
        -n "${GITLAB_CI:-}" || -n "${CURSOR_AGENT:-}" || -n "${CLAUDE_AGENT:-}" || \
-       -n "${AGENT_ENV:-}" || -n "${VSCODE_INJECTION:-}" || \
+       -n "${AGENT_ENV:-}" || \
        "${DEBIAN_FRONTEND:-}" == "noninteractive" ]] && return 0
     [[ ! -t 0 || ! -t 1 ]] && return 0
     [[ $- != *i* ]] && return 0
@@ -120,8 +139,9 @@ load_config() {
     ANIMATION_ENABLED=true; MATRIX_DURATION=2;  MATRIX_MODE="Letters"
     SECURITY_LOAD_STEPS=8;  GLITCH_INTENSITY=3;  SHOW_SYSTEM_INFO=true
     SHOW_USAGE_BARS=true;   SHOW_FULL_PATH=true; GRADIENT_TEXT=true
-    STEALTH_MODE=false;     SMART_SUGGESTIONS=true
-    THEME="Phantom";        AUTO_CHECK_UPDATES=true
+    STEALTH_MODE=false;     STEALTH_MASK_PATH=false
+    AI_BYPASS=true;         ALLOW_VSCODE_ANIMATIONS=true
+    SMART_SUGGESTIONS=true; THEME="Phantom";     AUTO_CHECK_UPDATES=true
     SILENT_UPDATE=false;    UPDATE_CHECK_DAYS=1
 
     if [[ -f "$CONFIG_FILE" ]]; then
@@ -136,6 +156,9 @@ load_config() {
             SHOW_FULL_PATH=$(   jq -r '.ShowFullPath      // true'      "$CONFIG_FILE" 2>/dev/null || echo true)
             GRADIENT_TEXT=$(    jq -r '.GradientText      // true'      "$CONFIG_FILE" 2>/dev/null || echo true)
             STEALTH_MODE=$(     jq -r '.StealthMode       // false'     "$CONFIG_FILE" 2>/dev/null || echo false)
+            STEALTH_MASK_PATH=$(jq -r '.StealthMaskPath   // false'     "$CONFIG_FILE" 2>/dev/null || echo false)
+            AI_BYPASS=$(        jq -r '.AIBypass          // true'      "$CONFIG_FILE" 2>/dev/null || echo true)
+            ALLOW_VSCODE_ANIMATIONS=$(jq -r '.AllowVSCodeAnimations // true' "$CONFIG_FILE" 2>/dev/null || echo true)
             SMART_SUGGESTIONS=$(jq -r '.SmartSuggestions  // true'      "$CONFIG_FILE" 2>/dev/null || echo true)
             THEME=$(            jq -r '.Theme             // "Phantom"' "$CONFIG_FILE" 2>/dev/null || echo "Phantom")
             AUTO_CHECK_UPDATES=$(jq -r '.AutoCheckUpdates // true'      "$CONFIG_FILE" 2>/dev/null || echo true)
@@ -161,21 +184,24 @@ load_config() {
                 printf '%s' "$line"
             }
             local v
-            v=$(_cfg AnimationEnabled);  [[ -n "$v" ]] && ANIMATION_ENABLED="$v"
-            v=$(_cfg MatrixDuration);    [[ -n "$v" ]] && MATRIX_DURATION="$v"
-            v=$(_cfg MatrixMode);        [[ -n "$v" ]] && MATRIX_MODE="$v"
-            v=$(_cfg SecurityLoadSteps); [[ -n "$v" ]] && SECURITY_LOAD_STEPS="$v"
-            v=$(_cfg GlitchIntensity);   [[ -n "$v" ]] && GLITCH_INTENSITY="$v"
-            v=$(_cfg ShowSystemInfo);    [[ -n "$v" ]] && SHOW_SYSTEM_INFO="$v"
-            v=$(_cfg ShowUsageBars);     [[ -n "$v" ]] && SHOW_USAGE_BARS="$v"
-            v=$(_cfg ShowFullPath);      [[ -n "$v" ]] && SHOW_FULL_PATH="$v"
-            v=$(_cfg GradientText);      [[ -n "$v" ]] && GRADIENT_TEXT="$v"
-            v=$(_cfg StealthMode);       [[ -n "$v" ]] && STEALTH_MODE="$v"
-            v=$(_cfg SmartSuggestions);  [[ -n "$v" ]] && SMART_SUGGESTIONS="$v"
-            v=$(_cfg Theme);             [[ -n "$v" ]] && THEME="$v"
-            v=$(_cfg AutoCheckUpdates);  [[ -n "$v" ]] && AUTO_CHECK_UPDATES="$v"
-            v=$(_cfg SilentUpdate);      [[ -n "$v" ]] && SILENT_UPDATE="$v"
-            v=$(_cfg UpdateCheckDays);   [[ -n "$v" ]] && UPDATE_CHECK_DAYS="$v"
+            v=$(_cfg AnimationEnabled);      [[ -n "$v" ]] && ANIMATION_ENABLED="$v"
+            v=$(_cfg MatrixDuration);        [[ -n "$v" ]] && MATRIX_DURATION="$v"
+            v=$(_cfg MatrixMode);            [[ -n "$v" ]] && MATRIX_MODE="$v"
+            v=$(_cfg SecurityLoadSteps);     [[ -n "$v" ]] && SECURITY_LOAD_STEPS="$v"
+            v=$(_cfg GlitchIntensity);       [[ -n "$v" ]] && GLITCH_INTENSITY="$v"
+            v=$(_cfg ShowSystemInfo);        [[ -n "$v" ]] && SHOW_SYSTEM_INFO="$v"
+            v=$(_cfg ShowUsageBars);         [[ -n "$v" ]] && SHOW_USAGE_BARS="$v"
+            v=$(_cfg ShowFullPath);          [[ -n "$v" ]] && SHOW_FULL_PATH="$v"
+            v=$(_cfg GradientText);          [[ -n "$v" ]] && GRADIENT_TEXT="$v"
+            v=$(_cfg StealthMode);           [[ -n "$v" ]] && STEALTH_MODE="$v"
+            v=$(_cfg StealthMaskPath);       [[ -n "$v" ]] && STEALTH_MASK_PATH="$v"
+            v=$(_cfg AIBypass);              [[ -n "$v" ]] && AI_BYPASS="$v"
+            v=$(_cfg AllowVSCodeAnimations); [[ -n "$v" ]] && ALLOW_VSCODE_ANIMATIONS="$v"
+            v=$(_cfg SmartSuggestions);      [[ -n "$v" ]] && SMART_SUGGESTIONS="$v"
+            v=$(_cfg Theme);                 [[ -n "$v" ]] && THEME="$v"
+            v=$(_cfg AutoCheckUpdates);      [[ -n "$v" ]] && AUTO_CHECK_UPDATES="$v"
+            v=$(_cfg SilentUpdate);          [[ -n "$v" ]] && SILENT_UPDATE="$v"
+            v=$(_cfg UpdateCheckDays);       [[ -n "$v" ]] && UPDATE_CHECK_DAYS="$v"
         fi
     fi
 }
@@ -193,6 +219,9 @@ save_config() {
   "ShowFullPath": $SHOW_FULL_PATH,
   "GradientText": $GRADIENT_TEXT,
   "StealthMode": $STEALTH_MODE,
+  "StealthMaskPath": $STEALTH_MASK_PATH,
+  "AIBypass": $AI_BYPASS,
+  "AllowVSCodeAnimations": $ALLOW_VSCODE_ANIMATIONS,
   "SmartSuggestions": $SMART_SUGGESTIONS,
   "Theme": "$THEME",
   "AutoCheckUpdates": $AUTO_CHECK_UPDATES,
@@ -587,12 +616,12 @@ show_dashboard() {
         if [[ "$THEME" == "Unknown" ]]; then
             local ops=("Anonymous" "Unknown-2829" "Root-Null" "Operator-X" "Enigma" "Cipher-2829" "Shadow-Ghost")
             local hosts=("DARKNET-GATEWAY" "ANONYMOUS-NODE-X" "NULL-SECTOR-404" "CIPHER-GRID-2829" "SHADOW-RELAY-0" "VOID-MATRIX-2829")
-            local systems=("Unknown Kernel v4.1.0 (Zero Footprint)" "Unknown Mesh OS v4.1.0 (Dark-Routing)" "Unknown Void Subsystem v4.1.0" "Unknown Protocol v4.1.0 (Ephemeral)")
+            local systems=("Unknown Kernel v${SCRIPT_VERSION} (Zero Footprint)" "Unknown Mesh OS v${SCRIPT_VERSION} (Dark-Routing)" "Unknown Void Subsystem v${SCRIPT_VERSION}" "Unknown Protocol v${SCRIPT_VERSION} (Ephemeral)")
             local uptimes=("Redacted (Zero-Log)" "Hidden Route (Active)" "Ephemeral Loop (Active)" "Zero-Trace (Cloaked)")
         else
             local ops=("Ghost" "Cipher" "Spectre" "Valkyrie" "Null" "Ronin" "Phantom-0")
             local hosts=("NEO-TOKYO-GRID" "SHADOW-NET-CORE" "ORBITAL-STATION-7" "BLACK-ICE-NODE" "NEURAL-MATRIX-01" "PHANTOM-GATEWAY")
-            local systems=("Phantom OS v4.1.0 (Quantum Microkernel)" "Phantom Neural Core v4.1.0 (Sub-atomic)" "Phantom Mesh OS v4.1.0 (Encrypted)" "Phantom Quantum Kernel v4.1.0 (Ring-0)")
+            local systems=("Phantom OS v${SCRIPT_VERSION} (Quantum Microkernel)" "Phantom Neural Core v${SCRIPT_VERSION} (Sub-atomic)" "Phantom Mesh OS v${SCRIPT_VERSION} (Encrypted)" "Phantom Quantum Kernel v${SCRIPT_VERSION} (Ring-0)")
             local uptimes=("∞ (Untraceable)" "99.999% (Cloaked)" "Sub-atomic Flux (Active)" "Quantum Loop (Shielded)")
         fi
         user="${ops[$(( RANDOM % ${#ops[@]} ))]}"
@@ -646,15 +675,15 @@ show_dashboard() {
     _border "$TOP_LEFT" "$TOP_RIGHT"
 
     # Centered Title Row
-    local skull_w=2
     local title_text="$TITLE v$SCRIPT_VERSION \"$SCRIPT_CODENAME\""
-    local title_vis=$(( (skull_w + 2) + ${#title_text} + (2 + skull_w) ))
-    local tpad=$(( inner - title_vis ))
+    local full_title="$SKULL  $title_text  $SKULL"
+    local tvl; tvl=$(_vlen "$full_title")
+    local tpad=$(( inner - tvl ))
     [[ $tpad -lt 0 ]] && tpad=0
     local hl=$(( tpad / 2 )); local hr=$(( tpad - hl ))
-    printf "%s%b%s%*s%b%s  %s  %s%b%*s%b%s%b\n" \
+    printf "%s%b%s%*s%b%s%b%*s%b%s%b\n" \
         "$ind" "$PRIMARY" "$VLINE" \
-        "$hl" "" "$SECONDARY" "$SKULL" "$title_text" "$SKULL" "$RESET" \
+        "$hl" "" "$SECONDARY" "$full_title" "$PRIMARY" \
         "$hr" "" "$PRIMARY" "$VLINE" "$RESET"
 
     _border "$T_LEFT" "$T_RIGHT"
@@ -930,13 +959,6 @@ show_update_celebration() {
     local p="phantom"; [[ "$THEME" == "Unknown" ]] && p="unknown"
     echo ""
     printf "%s%b  %s v%s \"%s\" is now online!%b\n\n" "$ind" "$NEON_GREEN" "$TITLE" "$SCRIPT_VERSION" "$SCRIPT_CODENAME" "$RESET"
-    printf "%s%b  Highlights in v%s:%b\n" "$ind" "$WHITE" "$SCRIPT_VERSION" "$RESET"
-    printf "%s%b  [+] Zero Dependencies:%b 100%% Native Shell (Zero Python/pip/jq)\n" "$ind" "$NEON_CYAN" "$GRAY"
-    printf "%s%b  [+] Instant Keypress Skip:%b Smooth launch on Spacebar or Enter\n" "$ind" "$NEON_CYAN" "$GRAY"
-    printf "%s%b  [+] Precision 66-Column Box:%b Unified alignment & closed borders\n" "$ind" "$NEON_CYAN" "$GRAY"
-    printf "%s%b  [+] Live Telemetry:%b Real-time hardware HUD (${p}-top / ${p}-dash -Live)\n" "$ind" "$NEON_CYAN" "$GRAY"
-    printf "\n"
-    printf "%s%b  Type '%b%s-help%b' or '%b%s-changelog%b' to explore.%b\n\n" "$ind" "$DARK_GRAY" "$GOLD" "$p" "$DARK_GRAY" "$GOLD" "$p" "$DARK_GRAY" "$RESET"
 
     local cl_file="$CONFIG_DIR/latest_changelog.md"
     if [[ ! -f "$cl_file" ]]; then
@@ -945,43 +967,60 @@ show_update_celebration() {
         [[ -n "$this_src" ]] && candidate="$(dirname "$this_src")/docs/changelogs/v$SCRIPT_VERSION.md"
         [[ -n "$candidate" && -f "$candidate" ]] && cl_file="$candidate"
     fi
+
     if [[ -f "$cl_file" ]]; then
-        printf "%s%bChangelog Highlights:%b\n" "$ind" "$GOLD" "$RESET"
-        local count=0
+        printf "%s%b  Changelog Highlights (v%s):%b\n" "$ind" "$GOLD" "$SCRIPT_VERSION" "$RESET"
         while IFS= read -r ln || [[ -n "$ln" ]]; do
-            if [[ -n "$ln" && "$ln" != "#"* ]]; then
-                printf "%s  %b%s%b\n" "$ind" "$GRAY" "$ln" "$RESET"
-                count=$(( count + 1 ))
-                [[ $count -ge 6 ]] && break
+            local trim; trim=$(echo "$ln" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            if [[ "$trim" == "- "* || "$trim" == "* "* ]]; then
+                local btext="${trim:2}"
+                if [[ "$btext" =~ ^\*\*(.+?)\*\*:\ *(.*)$ ]]; then
+                    local title="${BASH_REMATCH[1]}"
+                    local desc="${BASH_REMATCH[2]}"
+                    printf "%s  %b•%b %b%s:%b %s%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$title" "$GRAY" "$desc" "$RESET"
+                else
+                    printf "%s  %b•%b %b%s%b\n" "$ind" "$NEON_CYAN" "$RESET" "$GRAY" "$btext" "$RESET"
+                fi
             fi
         done < "$cl_file"
         echo ""
+    else
+        printf "%s%b  Changelog Highlights (v%s):%b\n" "$ind" "$GOLD" "$SCRIPT_VERSION" "$RESET"
+        printf "%s  %b•%b %bTheme-Matched Telemetry:%b Operator, Host, Kernel rotate per session%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
+        printf "%s  %b•%b %bPrecision Box Alignment:%b Standardized labels & 66-column closed borders%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
+        printf "%s  %b•%b %bDynamic Centering:%b Mathematically centered installer boxes%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
+        printf "%s  %b•%b %bDouble-Spaced Prompt:%b Clean status breathing room (✔  » )%b\n" "$ind" "$NEON_CYAN" "$RESET" "$WHITE" "$GRAY" "$RESET"
+        echo ""
     fi
 
-    # Smooth pause with keypress skip
-    for ((k=0; k<12; k++)); do
-        sleep 0.1
-        if _check_skip_key; then
-            break
+    printf "%s%b  Type '%b%s-help%b' or '%b%s-changelog%b' to explore.%b\n\n" "$ind" "$DARK_GRAY" "$GOLD" "$p" "$DARK_GRAY" "$GOLD" "$p" "$DARK_GRAY" "$RESET"
+
+    printf "%s%b  Press any key to continue...%b" "$ind" "$NEON_GREEN" "$RESET"
+    if [[ -t 0 ]]; then
+        if [[ -n "${ZSH_VERSION:-}" ]]; then
+            read -k 1 -s 2>/dev/null || read -r 2>/dev/null
+        else
+            read -r -s -n 1 2>/dev/null || read -r 2>/dev/null
         fi
-    done
+    fi
+    printf "\n"
 }
 
 start_phantom_terminal() {
     local force=false
     [[ "${1:-}" == "--force" || "${1:-}" == "-f" ]] && force=true
-    if _is_agent_session && [[ "$force" == "false" ]]; then return; fi
 
     load_config; get_theme_colors; get_cache
+    if _is_agent_session && [[ "$force" == "false" ]]; then return; fi
 
-    # Post-Update Celebration & Changelog Modal
-    if [[ -z "$LAST_SEEN_VERSION" ]] || version_gt "$SCRIPT_VERSION" "$LAST_SEEN_VERSION"; then
+    # Post-Update Celebration & Changelog Modal (Only for upgrading users, NOT fresh installs)
+    if [[ -n "$LAST_SEEN_VERSION" ]] && version_gt "$SCRIPT_VERSION" "$LAST_SEEN_VERSION"; then
         show_update_celebration "$LAST_SEEN_VERSION"
-        LAST_SEEN_VERSION="$SCRIPT_VERSION"
-        UPDATE_DOWNLOADED=false
-        UPDATE_AVAILABLE=false
-        save_cache "$LAST_UPDATE_CHECK" "$LATEST_VERSION" false false "$SCRIPT_VERSION"
     fi
+    LAST_SEEN_VERSION="$SCRIPT_VERSION"
+    UPDATE_DOWNLOADED=false
+    UPDATE_AVAILABLE=false
+    save_cache "$LAST_UPDATE_CHECK" "$LATEST_VERSION" false false "$SCRIPT_VERSION"
 
     if [[ (-n "${PHANTOM_SESSION_ACTIVE:-}" || -n "${UNKNOWN_SESSION_ACTIVE:-}") && "$force" == "false" ]]; then
         show_dashboard
@@ -1168,6 +1207,7 @@ phantom-help() {
     echo "  ${GOLD}${p}-theme${WHITE}         - Switch theme (Phantom/Unknown)${RESET}"
     echo "  ${GOLD}${p}-config${WHITE}        - Show configuration${RESET}"
     echo "  ${GOLD}${p}-config --edit${WHITE} - Edit config in \$EDITOR${RESET}"
+    echo "  ${GOLD}${p}-config --reset${WHITE}- Reset configuration to defaults${RESET}"
     echo "  ${GOLD}${p}-dash${WHITE}          - Show system dashboard${RESET}"
     echo "  ${GOLD}${p}-dash -Live${WHITE}    - Live in-place dashboard monitor${RESET}"
     echo "  ${GOLD}${p}-stealth${WHITE}       - Toggle privacy spoofing (on/off)${RESET}"
@@ -1179,25 +1219,148 @@ phantom-help() {
 }
 
 phantom-config() {
-    load_config
-    if [[ "${1:-}" == "-edit" || "${1:-}" == "--edit" ]]; then
+    load_config; get_theme_colors
+    local p="phantom"; [[ "$THEME" == "Unknown" ]] && p="unknown"
+
+    if [[ "${1:-}" == "-edit" || "${1:-}" == "--edit" || "${1:-}" == "-e" ]]; then
         ${EDITOR:-nano} "$CONFIG_FILE"; return
     fi
+
+    if [[ "${1:-}" == "-reset" || "${1:-}" == "--reset" || "${1:-}" == "-r" ]]; then
+        ANIMATION_ENABLED=true; MATRIX_DURATION=2;  MATRIX_MODE="Letters"
+        SECURITY_LOAD_STEPS=8;  GLITCH_INTENSITY=3;  SHOW_SYSTEM_INFO=true
+        SHOW_USAGE_BARS=true;   SHOW_FULL_PATH=true; GRADIENT_TEXT=true
+        STEALTH_MODE=false;     STEALTH_MASK_PATH=false
+        AI_BYPASS=true;         ALLOW_VSCODE_ANIMATIONS=true
+        SMART_SUGGESTIONS=true; THEME="Phantom";     AUTO_CHECK_UPDATES=true
+        SILENT_UPDATE=false;    UPDATE_CHECK_DAYS=1
+        save_config
+        echo "${NEON_GREEN}[+] Configuration reset to factory defaults.${RESET}"
+        echo ""
+        return
+    fi
+
+    # Direct key-value toggle/setter: phantom-config <key> <val>
+    if [[ -n "${1:-}" && -n "${2:-}" ]]; then
+        local key; key=$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr -d '-')
+        local val; val=$(echo "$2" | tr '[:upper:]' '[:lower:]')
+        local b_val="false"
+        case "$val" in
+            on|true|1|yes|enable) b_val="true" ;;
+            off|false|0|no|disable) b_val="false" ;;
+        esac
+
+        case "$key" in
+            aibypass|ai|bypass|agentguard)
+                AI_BYPASS="$b_val"; save_config
+                local status="${DARK_GRAY}DISABLED${RESET}"
+                [[ "$b_val" == "true" ]] && status="${NEON_GREEN}ENABLED${RESET}"
+                echo "${NEON_CYAN}[*] AI Agent Bypass is now $status."
+                return
+                ;;
+            stealthmaskpath|maskpath|hidepath|cloakpath)
+                STEALTH_MASK_PATH="$b_val"; save_config
+                local status="${DARK_GRAY}DISABLED (Real path shown)${RESET}"
+                [[ "$b_val" == "true" ]] && status="${NEON_GREEN}ENABLED (Path hidden in stealth)${RESET}"
+                echo "${NEON_CYAN}[*] Stealth Path Masking is now $status."
+                return
+                ;;
+            allowvscodeanimations|vscode|vscodeanimations)
+                ALLOW_VSCODE_ANIMATIONS="$b_val"; save_config
+                local status="${DARK_GRAY}BLOCKED${RESET}"
+                [[ "$b_val" == "true" ]] && status="${NEON_GREEN}ALLOWED${RESET}"
+                echo "${NEON_CYAN}[*] VS Code animations are now $status."
+                return
+                ;;
+            animation|animationenabled)
+                ANIMATION_ENABLED="$b_val"; save_config
+                echo "${NEON_CYAN}[*] Startup animations set to $b_val.${RESET}"
+                return
+                ;;
+            livestats|live)
+                LIVE_STATS="$b_val"; save_config
+                echo "${NEON_CYAN}[*] Live telemetry HUD set to $b_val.${RESET}"
+                return
+                ;;
+            showusagebars|usagebars|bars)
+                SHOW_USAGE_BARS="$b_val"; save_config
+                echo "${NEON_CYAN}[*] Usage bars set to $b_val.${RESET}"
+                return
+                ;;
+            showfullpath|fullpath)
+                SHOW_FULL_PATH="$b_val"; save_config
+                echo "${NEON_CYAN}[*] Show full path set to $b_val.${RESET}"
+                return
+                ;;
+            suggestions|smartsuggestions)
+                SMART_SUGGESTIONS="$b_val"; save_config
+                echo "${NEON_CYAN}[*] Smart suggestions set to $b_val.${RESET}"
+                return
+                ;;
+        esac
+    fi
+
+    local box_width=66
+    local inner=$(( box_width - 2 ))
+    local i hln=""
+    for ((i=0; i<inner; i++)); do hln+="$HLINE"; done
+
+    _cfg_row() {
+        local lbl="$1" val="$2" vc="$3" cmd="$4"
+        local left="  ${lbl}"
+        local mid="${val}"
+        local right="${cmd}"
+        local content="${left}${mid} ${right}"
+        local cvl; cvl=$(_vlen "$content")
+        local rpad=$(( inner - cvl ))
+        [[ $rpad -lt 0 ]] && rpad=0
+        printf "%b%s%b%b%s%b%b%s%b %b%s%b%*s%b%s%b\n" \
+            "$PRIMARY" "$VLINE" "$RESET" \
+            "$WHITE" "$left" "$RESET" \
+            "$vc" "$mid" "$RESET" \
+            "$DARK_GRAY" "$right" "$RESET" \
+            "$rpad" "" \
+            "$PRIMARY" "$VLINE" "$RESET"
+    }
+
     echo ""
-    echo "${NEON_CYAN}Config: $CONFIG_FILE${RESET}"; echo ""
-    for pair in \
-        "Theme:$THEME" "AnimationEnabled:$ANIMATION_ENABLED" \
-        "MatrixMode:$MATRIX_MODE" "MatrixDuration:$MATRIX_DURATION" \
-        "SecurityLoadSteps:$SECURITY_LOAD_STEPS" "GlitchIntensity:$GLITCH_INTENSITY" \
-        "ShowSystemInfo:$SHOW_SYSTEM_INFO" "ShowUsageBars:$SHOW_USAGE_BARS" \
-        "ShowFullPath:$SHOW_FULL_PATH" "GradientText:$GRADIENT_TEXT" \
-        "StealthMode:$STEALTH_MODE" "SmartSuggestions:$SMART_SUGGESTIONS" \
-        "AutoCheckUpdates:$AUTO_CHECK_UPDATES"
-    do
-        local k="${pair%%:*}" v="${pair#*:}"
-        echo "  ${GOLD}${k}${WHITE}: ${v}${RESET}"
-    done
-    echo ""; echo "${DARK_GRAY}phantom-config --edit to change settings${RESET}"; echo ""
+    printf "%b%s%s%s%b\n" "$PRIMARY" "$TOP_LEFT" "$hln" "$TOP_RIGHT" "$RESET"
+    local title_str="[=] PHANTOM TERMINAL CONFIGURATION [=]"
+    [[ "$THEME" == "Unknown" ]] && title_str="[=] UNKNOWN TERMINAL CONFIGURATION [=]"
+    local tvl; tvl=$(_vlen "$title_str")
+    local tpad=$(( inner - tvl ))
+    [[ $tpad -lt 0 ]] && tpad=0
+    local hl=$(( tpad / 2 )); local hr=$(( tpad - hl ))
+    printf "%b%s%b%*s%b%s%b%*s%b%s%b\n" \
+        "$PRIMARY" "$VLINE" "$RESET" \
+        "$hl" "" "$SECONDARY" "$title_str" "$RESET" \
+        "$hr" "" "$PRIMARY" "$VLINE" "$RESET"
+    printf "%b%s%s%s%b\n" "$PRIMARY" "$T_LEFT" "$hln" "$T_RIGHT" "$RESET"
+
+    local a_val="OFF   " a_col="$DARK_GRAY"; [[ "$ANIMATION_ENABLED" == "true" ]] && a_val="ON    " a_col="$NEON_GREEN"
+    local s_val="OFF   " s_col="$DARK_GRAY"; [[ "$STEALTH_MODE" == "true" ]] && s_val="ON    " s_col="$NEON_GREEN"
+    local m_val="OFF   " m_col="$DARK_GRAY"; [[ "$STEALTH_MASK_PATH" == "true" ]] && m_val="ON    " m_col="$NEON_GREEN"
+    local ai_val="OFF   " ai_col="$DARK_GRAY"; [[ "$AI_BYPASS" == "true" ]] && ai_val="ON    " ai_col="$NEON_GREEN"
+    local v_val="OFF   " v_col="$DARK_GRAY"; [[ "$ALLOW_VSCODE_ANIMATIONS" == "true" ]] && v_val="ON    " v_col="$NEON_GREEN"
+    local ub_val="OFF   " ub_col="$DARK_GRAY"; [[ "$SHOW_USAGE_BARS" == "true" ]] && ub_val="ON    " ub_col="$NEON_GREEN"
+    local ss_val="OFF   " ss_col="$DARK_GRAY"; [[ "$SMART_SUGGESTIONS" == "true" ]] && ss_val="ON    " ss_col="$NEON_GREEN"
+    local fp_val="OFF   " fp_col="$DARK_GRAY"; [[ "$SHOW_FULL_PATH" == "true" ]] && fp_val="ON    " fp_col="$NEON_GREEN"
+    local t_val="$THEME   "; [[ ${#THEME} -eq 7 ]] && t_val="$THEME"
+
+    _cfg_row "Startup Animations:   " "$a_val" "$a_col" "${p}-config animation on|off"
+    _cfg_row "Active Theme:         " "$t_val" "$GOLD" "${p}-theme Phantom|Unknown"
+    _cfg_row "Stealth Spoofing:     " "$s_val" "$s_col" "${p}-stealth on|off"
+    _cfg_row "Stealth Mask Path:    " "$m_val" "$m_col" "${p}-config maskpath on|off"
+    _cfg_row "AI Agent / CI Bypass: " "$ai_val" "$ai_col" "${p}-config aibypass on|off"
+    _cfg_row "VS Code Animations:   " "$v_val" "$v_col" "${p}-config vscode on|off"
+    _cfg_row "CPU & RAM Usage Bars: " "$ub_val" "$ub_col" "${p}-config bars on|off"
+    _cfg_row "Smart Suggestions:    " "$ss_val" "$ss_col" "${p}-config suggestions on|off"
+    _cfg_row "Full Path in Prompt:  " "$fp_val" "$fp_col" "${p}-config fullpath on|off"
+
+    printf "%b%s%s%s%b\n" "$PRIMARY" "$BOTTOM_LEFT" "$hln" "$BOTTOM_RIGHT" "$RESET"
+    echo ""
+    echo "${DARK_GRAY}Commands: ${GOLD}${p}-config [setting] on|off ${DARK_GRAY}| ${GOLD}${p}-config --edit ${DARK_GRAY}| ${GOLD}${p}-config --reset${RESET}"
+    echo ""
 }
 
 phantom-theme() {
@@ -1342,22 +1505,32 @@ phantom-changelog() {
         [[ -n "$this_src" ]] && candidate="$(dirname "$this_src")/docs/changelogs/v$SCRIPT_VERSION.md"
         [[ -n "$candidate" && -f "$candidate" ]] && cl_file="$candidate"
     fi
+    local title_brand="Phantom Terminal"
+    [[ "$THEME" == "Unknown" ]] && title_brand="Unknown Terminal"
     if [[ -f "$cl_file" ]]; then
         echo ""
-        echo "${NEON_CYAN}=== Phantom Terminal v$SCRIPT_VERSION Changelog ===${RESET}"
+        echo "${NEON_CYAN}=== $title_brand v$SCRIPT_VERSION Changelog ===${RESET}"
         echo ""
         while IFS= read -r line || [[ -n "$line" ]]; do
-            if [[ "$line" == "# "* ]]; then
-                echo "${GOLD}$line${RESET}"
-            elif [[ "$line" == "## "* ]]; then
+            local trim; trim=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            if [[ "$trim" == "# "* ]]; then
+                echo "${GOLD}$trim${RESET}"
+            elif [[ "$trim" == "## "* ]]; then
                 echo ""
-                echo "${NEON_GREEN}$line${RESET}"
-            elif [[ "$line" == "### "* ]]; then
-                echo "${WHITE}$line${RESET}"
-            elif [[ "$line" == "- "* || "$line" == "* "* ]]; then
-                echo "  ${NEON_CYAN}•${GRAY} ${line:2}${RESET}"
-            else
-                echo "${DARK_GRAY}$line${RESET}"
+                echo "${NEON_GREEN}$trim${RESET}"
+            elif [[ "$trim" == "### "* ]]; then
+                echo "${WHITE}$trim${RESET}"
+            elif [[ "$trim" == "- "* || "$trim" == "* "* ]]; then
+                local btext="${trim:2}"
+                if [[ "$btext" =~ ^\*\*(.+?)\*\*:\ *(.*)$ ]]; then
+                    local title="${BASH_REMATCH[1]}"
+                    local desc="${BASH_REMATCH[2]}"
+                    printf "  %b•%b %b%s:%b %s%b\n" "$NEON_CYAN" "$RESET" "$WHITE" "$title" "$GRAY" "$desc" "$RESET"
+                else
+                    printf "  %b•%b %b%s%b\n" "$NEON_CYAN" "$RESET" "$GRAY" "$btext" "$RESET"
+                fi
+            elif [[ -n "$trim" ]]; then
+                echo "${DARK_GRAY}$trim${RESET}"
             fi
         done < "$cl_file"
         echo ""
@@ -1452,11 +1625,20 @@ set_phantom_prompt() {
         local user_d="${USER:-$(whoami 2>/dev/null || echo 'user')}"
         if [[ "$STEALTH_MODE" == "true" ]]; then
             if [[ "$THEME" == "Unknown" ]]; then
-                path_d="~/unknown/darknet/grid"
                 user_d="unknown"
             else
-                path_d="~/phantom/core/grid"
                 user_d="ghost"
+            fi
+            if [[ "$STEALTH_MASK_PATH" == "true" ]]; then
+                if [[ "$THEME" == "Unknown" ]]; then
+                    path_d="~/unknown/darknet/grid"
+                else
+                    path_d="~/phantom/core/grid"
+                fi
+            elif [[ "$SHOW_FULL_PATH" == "true" ]]; then
+                path_d="$PWD"
+            else
+                path_d="${PWD##*/}"; [[ -z "$path_d" ]] && path_d="/"
             fi
         elif [[ "$SHOW_FULL_PATH" == "true" ]]; then
             path_d="$PWD"
